@@ -1,0 +1,143 @@
+# svx — Simulate, Verify, Execute
+
+A safety layer for coding agents. Before any action touches your codebase, svx simulates the outcome, verifies it against safety policies, and gives a clear verdict.
+
+**Core principle:** simulation is for proposal; verification is for commitment.
+
+## Why
+
+Coding agents (Claude Code, Copilot, Cursor, Aider) make mistakes — destructive commands, wrong git operations, irreversible changes. Current safety is either "human watches everything" (doesn't scale) or static blocklists (no context). svx adds intelligent, context-aware simulation.
+
+## Install
+
+```bash
+pip install -e .
+```
+
+## Usage
+
+### Check a command before running it
+
+```bash
+svx check "git push --force origin main"
+```
+
+```
+  svx ~ git push --force origin main
+  ────────────────────────────────────────────────────────
+  Verdict:  BLOCK
+  Risk:     CRITICAL
+  Force-push to main — rewrites remote history
+  Effects:
+    → Remote branch 'main' will be overwritten
+    → Commits on remote not in local will become unreachable
+  Reasons:
+    ! BLOCKED: Force push to main/master is not allowed
+  Suggestions:
+    > Do not run this command.
+    > Consider a safer alternative.
+```
+
+### Safe commands pass through
+
+```bash
+svx check "git status"
+```
+
+```
+  svx ~ git status
+  ────────────────────────────────────────────────────────
+  Verdict:  ALLOW
+  Risk:     NONE
+  git status: read-only or low-risk operation
+```
+
+### Chained commands — each one analyzed
+
+```bash
+svx check "git add . && git commit -m 'fix' && git push --force origin master"
+```
+
+svx analyzes each command in the chain independently. If any step is blocked, the whole chain is blocked.
+
+### JSON output for programmatic use
+
+```bash
+svx check "git reset --hard HEAD" --json
+```
+
+### Claude Code hook integration
+
+svx can run as a pre-tool hook for Claude Code, automatically intercepting every shell command:
+
+```bash
+svx hook  # reads tool input from stdin
+```
+
+### View audit log
+
+```bash
+svx audit --tail 20
+```
+
+## What it catches
+
+| Command | Verdict | Why |
+|---|---|---|
+| `git push --force origin main` | BLOCK | Force push to main — irreversible, rewrites history |
+| `git reset --hard HEAD~3` | CONFIRM | Destroys uncommitted changes |
+| `git clean -fd` | CONFIRM | Permanently deletes untracked files |
+| `git branch -D feature` | CONFIRM | Force-deletes branch, may lose unmerged work |
+| `rm -rf build/` | CONFIRM | Recursive delete, untracked files unrecoverable |
+| `kill -9 1234` | CONFIRM | Force-kills process, unsaved state lost |
+| `git push origin feature` | ALLOW | Normal push, reversible |
+| `git status` | ALLOW | Read-only |
+| `npm install lodash` | ALLOW | Reversible package install |
+
+## How it works
+
+```
+Command → Parse → Snapshot world state → Simulate outcome → Verify safety → Verdict
+```
+
+1. **Parse**: Break the command into program, subcommand, flags, targets
+2. **Snapshot**: Capture current git state, file existence, sizes, tracking status
+3. **Simulate**: Predict effects using dry-run flags and heuristic analysis (no LLM calls)
+4. **Verify**: Score risk based on reversibility, blast radius, data loss, and policies
+5. **Verdict**: ALLOW, CONFIRM, or BLOCK — with reasons and suggestions
+6. **Audit**: Log every decision with full provenance
+
+## Policies
+
+Safety rules are defined in `policies/default.yaml`:
+
+```yaml
+blocks:
+  force_push_to_main: true
+  delete_root: true
+
+confirmations:
+  irreversible_actions: true
+  data_loss: true
+  force_flags: true
+
+thresholds:
+  max_blast_radius_without_confirm: 5
+```
+
+## Exit codes
+
+- `0` — ALLOW
+- `1` — CONFIRM (needs user approval)
+- `2` — BLOCK (should not run)
+
+## Architecture
+
+- **No LLM calls** — pure deterministic analysis in v0.1
+- **Uses real data** — git dry-runs, file stats, not guesswork
+- **Fast** — runs in <100ms for most commands
+- **Provenance** — every decision logged with full context
+
+## License
+
+MIT

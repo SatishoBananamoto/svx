@@ -1,0 +1,17 @@
+# svx default safety policies
+
+blocks:
+  # Hard blocks — these commands are never allowed
+  force_push_to_main: true
+  delete_root: true
+
+confirmations:
+  # These require explicit user confirmation
+  irreversible_actions: true
+  data_loss: true
+  force_flags: true
+  high_blast_radius: true
+
+thresholds:
+  # Blast radius above this requires confirmation
+  max_blast_radius_without_confirm: 5
