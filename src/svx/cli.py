@@ -107,24 +107,42 @@ def _cmd_check(args):
 
 
 def _cmd_hook():
-    """Run as a Claude Code pre-tool hook.
+    """Run as a Claude Code PreToolUse hook.
 
-    Reads tool input from stdin (JSON with 'command' field).
-    Exits 0 to allow, non-zero to block/warn.
-    Writes warnings to stderr.
+    Reads hook input from stdin as JSON:
+      {"tool_name": "Bash", "tool_input": {"command": "..."}, "hook_event_name": "PreToolUse"}
+
+    Output JSON to stdout:
+      - {"decision": "allow"} to allow
+      - {"decision": "block", "reason": "..."} to block
+      - {"decision": "allow", "systemMessage": "..."} to allow with warning
+
+    Exit 0 always — decisions communicated via JSON output.
     """
     try:
         raw_input = sys.stdin.read()
-        tool_input = json.loads(raw_input)
+        hook_input = json.loads(raw_input)
     except (json.JSONDecodeError, ValueError):
-        # Can't parse input — allow by default (fail open)
+        # Can't parse — fail open
+        print(json.dumps({}))
         sys.exit(0)
 
+    # Only intercept Bash tool calls
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name != "Bash":
+        print(json.dumps({}))
+        sys.exit(0)
+
+    tool_input = hook_input.get("tool_input", {})
     command = tool_input.get("command", "")
     if not command:
+        print(json.dumps({}))
         sys.exit(0)
 
     commands = parse_command(command)
+    worst_verdict = Verdict.ALLOW
+    all_reasons = []
+    all_suggestions = []
 
     for cmd in commands:
         snap = capture(cmd)
@@ -133,16 +151,25 @@ def _cmd_hook():
         log_event(cmd, snap, result)
 
         if result.verdict == Verdict.BLOCK:
-            msg = _format_hook_message(cmd, result)
-            print(msg, file=sys.stderr)
-            sys.exit(2)
+            worst_verdict = Verdict.BLOCK
+        elif result.verdict == Verdict.CONFIRM and worst_verdict != Verdict.BLOCK:
+            worst_verdict = Verdict.CONFIRM
 
-        if result.verdict == Verdict.CONFIRM:
-            msg = _format_hook_message(cmd, result)
-            print(msg, file=sys.stderr)
-            # Exit 0 but print warning — let Claude Code's own
-            # confirmation handle the UX
-            sys.exit(0)
+        all_reasons.extend(result.reasons)
+        all_suggestions.extend(result.suggestions)
+
+    if worst_verdict == Verdict.BLOCK:
+        msg = "[svx BLOCK] " + " | ".join(all_reasons[:3])
+        if all_suggestions:
+            msg += "\nSuggestions: " + " | ".join(all_suggestions[:2])
+        print(json.dumps({"decision": "block", "reason": msg}))
+    elif worst_verdict == Verdict.CONFIRM:
+        msg = "[svx] " + " | ".join(all_reasons[:3])
+        if all_suggestions:
+            msg += "\nSuggestions: " + " | ".join(all_suggestions[:2])
+        print(json.dumps({"systemMessage": msg}))
+    else:
+        print(json.dumps({}))
 
     sys.exit(0)
 
