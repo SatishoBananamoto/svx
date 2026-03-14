@@ -112,10 +112,8 @@ def _cmd_hook():
     Reads hook input from stdin as JSON:
       {"tool_name": "Bash", "tool_input": {"command": "..."}, "hook_event_name": "PreToolUse"}
 
-    Output JSON to stdout:
-      - {"decision": "allow"} to allow
-      - {"decision": "block", "reason": "..."} to block
-      - {"decision": "allow", "systemMessage": "..."} to allow with warning
+    Output JSON to stdout using hookSpecificOutput format:
+      - permissionDecision: "allow" | "deny" | "ask"
 
     Exit 0 always — decisions communicated via JSON output.
     """
@@ -159,15 +157,29 @@ def _cmd_hook():
         all_suggestions.extend(result.suggestions)
 
     if worst_verdict == Verdict.BLOCK:
-        msg = "[svx BLOCK] " + " | ".join(all_reasons[:3])
+        msg = "[svx] " + " | ".join(all_reasons[:3])
         if all_suggestions:
-            msg += "\nSuggestions: " + " | ".join(all_suggestions[:2])
-        print(json.dumps({"decision": "block", "reason": msg}))
+            msg += " | Suggestions: " + " | ".join(all_suggestions[:2])
+        output = {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "deny",
+                "permissionDecisionReason": msg,
+            }
+        }
+        print(json.dumps(output))
     elif worst_verdict == Verdict.CONFIRM:
         msg = "[svx] " + " | ".join(all_reasons[:3])
         if all_suggestions:
-            msg += "\nSuggestions: " + " | ".join(all_suggestions[:2])
-        print(json.dumps({"systemMessage": msg}))
+            msg += " | Suggestions: " + " | ".join(all_suggestions[:2])
+        output = {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "ask",
+                "permissionDecisionReason": msg,
+            }
+        }
+        print(json.dumps(output))
     else:
         print(json.dumps({}))
 
