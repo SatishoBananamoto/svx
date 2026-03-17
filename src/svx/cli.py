@@ -12,7 +12,7 @@ from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
 from .audit import log_event
-from .schemas import Verdict, RiskLevel
+from .schemas import Verdict, RiskLevel, ParsedCommand, CommandCategory
 
 
 # ANSI colors
@@ -60,6 +60,9 @@ def main():
     audit_parser = sub.add_parser("audit", help="View audit log")
     audit_parser.add_argument("--tail", type=int, default=10, help="Number of entries")
 
+    # svx serve (MCP server mode)
+    sub.add_parser("serve", help="Run as MCP server (stdio transport)")
+
     args = parser.parse_args()
 
     if args.subcommand == "check":
@@ -68,6 +71,8 @@ def main():
         _cmd_hook()
     elif args.subcommand == "audit":
         _cmd_audit(args)
+    elif args.subcommand == "serve":
+        _cmd_serve()
     else:
         parser.print_help()
         sys.exit(0)
@@ -106,11 +111,16 @@ def _cmd_check(args):
     sys.exit(0)
 
 
+_INTERCEPTED_TOOLS = {"Bash", "Edit", "Write"}
+
+
 def _cmd_hook():
     """Run as a Claude Code PreToolUse hook.
 
     Reads hook input from stdin as JSON:
-      {"tool_name": "Bash", "tool_input": {"command": "..."}, "hook_event_name": "PreToolUse"}
+      {"tool_name": "...", "tool_input": {...}, "hook_event_name": "PreToolUse"}
+
+    Intercepts: Bash, Edit, Write tool calls.
 
     Output JSON to stdout using hookSpecificOutput format:
       - permissionDecision: "allow" | "deny" | "ask"
@@ -125,19 +135,28 @@ def _cmd_hook():
         print(json.dumps({}))
         sys.exit(0)
 
-    # Only intercept Bash tool calls
     tool_name = hook_input.get("tool_name", "")
-    if tool_name != "Bash":
+    if tool_name not in _INTERCEPTED_TOOLS:
         print(json.dumps({}))
         sys.exit(0)
 
     tool_input = hook_input.get("tool_input", {})
-    command = tool_input.get("command", "")
-    if not command:
+
+    # Build command list depending on tool type
+    if tool_name == "Bash":
+        command = tool_input.get("command", "")
+        if not command:
+            print(json.dumps({}))
+            sys.exit(0)
+        commands = parse_command(command)
+    elif tool_name == "Edit":
+        commands = [_parse_edit_tool(tool_input)]
+    elif tool_name == "Write":
+        commands = [_parse_write_tool(tool_input)]
+    else:
         print(json.dumps({}))
         sys.exit(0)
 
-    commands = parse_command(command)
     worst_verdict = Verdict.ALLOW
     all_reasons = []
     all_suggestions = []
@@ -156,34 +175,71 @@ def _cmd_hook():
         all_reasons.extend(result.reasons)
         all_suggestions.extend(result.suggestions)
 
-    if worst_verdict == Verdict.BLOCK:
-        msg = "[svx] " + " | ".join(all_reasons[:3])
-        if all_suggestions:
-            msg += " | Suggestions: " + " | ".join(all_suggestions[:2])
-        output = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "deny",
-                "permissionDecisionReason": msg,
-            }
-        }
-        print(json.dumps(output))
-    elif worst_verdict == Verdict.CONFIRM:
-        msg = "[svx] " + " | ".join(all_reasons[:3])
-        if all_suggestions:
-            msg += " | Suggestions: " + " | ".join(all_suggestions[:2])
-        output = {
-            "hookSpecificOutput": {
-                "hookEventName": "PreToolUse",
-                "permissionDecision": "ask",
-                "permissionDecisionReason": msg,
-            }
-        }
-        print(json.dumps(output))
-    else:
-        print(json.dumps({}))
-
+    _emit_hook_output(worst_verdict, all_reasons, all_suggestions)
     sys.exit(0)
+
+
+def _parse_edit_tool(tool_input: dict) -> ParsedCommand:
+    """Convert an Edit tool call into a ParsedCommand."""
+    file_path = tool_input.get("file_path", "")
+    old_string = tool_input.get("old_string", "")
+    new_string = tool_input.get("new_string", "")
+
+    return ParsedCommand(
+        raw=f"Edit {file_path}",
+        program="Edit",
+        category=CommandCategory.FILE_EDIT,
+        targets=[file_path],
+        metadata={
+            "old_string": old_string,
+            "new_string": new_string,
+        },
+    )
+
+
+def _parse_write_tool(tool_input: dict) -> ParsedCommand:
+    """Convert a Write tool call into a ParsedCommand."""
+    file_path = tool_input.get("file_path", "")
+    content = tool_input.get("content", "")
+
+    return ParsedCommand(
+        raw=f"Write {file_path}",
+        program="Write",
+        category=CommandCategory.FILE_WRITE,
+        targets=[file_path],
+        metadata={
+            "content_length": len(content),
+        },
+    )
+
+
+def _emit_hook_output(
+    verdict: Verdict, reasons: list[str], suggestions: list[str]
+) -> None:
+    """Print the hookSpecificOutput JSON to stdout."""
+    if verdict == Verdict.ALLOW:
+        print(json.dumps({}))
+        return
+
+    decision = "deny" if verdict == Verdict.BLOCK else "ask"
+    msg = "[svx] " + " | ".join(reasons[:3])
+    if suggestions:
+        msg += " | Suggestions: " + " | ".join(suggestions[:2])
+
+    output = {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": decision,
+            "permissionDecisionReason": msg,
+        }
+    }
+    print(json.dumps(output))
+
+
+def _cmd_serve():
+    """Run svx as an MCP server over stdio."""
+    from .server import run_server
+    run_server()
 
 
 def _cmd_audit(args):

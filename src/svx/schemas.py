@@ -34,6 +34,8 @@ class CommandCategory(Enum):
     FILE_DELETE = "file_delete"
     FILE_MOVE = "file_move"
     FILE_PERMISSION = "file_permission"
+    FILE_EDIT = "file_edit"
+    FILE_WRITE = "file_write"
     PACKAGE = "package"
     PROCESS = "process"
     NETWORK = "network"
@@ -51,6 +53,7 @@ class ParsedCommand:
     flags: list[str] = field(default_factory=list)
     category: CommandCategory = CommandCategory.UNKNOWN
     targets: list[str] = field(default_factory=list)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -66,6 +69,10 @@ class WorldSnapshot:
     target_exists: dict[str, bool] = field(default_factory=dict)
     target_sizes: dict[str, int] = field(default_factory=dict)
     target_git_tracked: dict[str, bool] = field(default_factory=dict)
+    target_line_count: dict[str, int] = field(default_factory=dict)
+    target_is_config: dict[str, bool] = field(default_factory=dict)
+    edit_old_string_found: bool | None = None
+    edit_change_ratio: float = 0.0
 
 
 @dataclass

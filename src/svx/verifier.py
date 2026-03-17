@@ -117,6 +117,25 @@ def _assess_risk(
         if "main" in targets or "master" in targets:
             score += 2
 
+    # Config file edits
+    if cmd.category in (CommandCategory.FILE_EDIT, CommandCategory.FILE_WRITE):
+        for target in cmd.targets:
+            if snap.target_is_config.get(target, False):
+                score += 2
+
+    # Large rewrite via Edit tool
+    if cmd.category == CommandCategory.FILE_EDIT and snap.edit_change_ratio > 0.5:
+        score += 2
+
+    # Overwriting untracked file via Write tool
+    if cmd.category == CommandCategory.FILE_WRITE:
+        for target in cmd.targets:
+            if (
+                snap.target_exists.get(target, False)
+                and not snap.target_git_tracked.get(target, False)
+            ):
+                score += 3  # high risk — unrecoverable overwrite
+
     # Dirty repo + destructive command
     if snap.git_dirty and sim.data_loss_possible:
         score += 1
@@ -197,6 +216,30 @@ def _check_confirmations(
         if has_force_flags(cmd):
             reasons.append("Force flag requires confirmation")
 
+    # Config file edits
+    if confirm_rules.get("config_file_edits", True):
+        if cmd.category in (CommandCategory.FILE_EDIT, CommandCategory.FILE_WRITE):
+            for target in cmd.targets:
+                if snap.target_is_config.get(target, False):
+                    reasons.append(f"Editing config file '{target}' requires confirmation")
+
+    # Large rewrites (>50% of file)
+    if cmd.category == CommandCategory.FILE_EDIT and snap.edit_change_ratio > 0.5:
+        reasons.append(
+            f"Major rewrite ({snap.edit_change_ratio:.0%} of file) requires confirmation"
+        )
+
+    # Overwriting existing untracked files
+    if cmd.category == CommandCategory.FILE_WRITE:
+        for target in cmd.targets:
+            if (
+                snap.target_exists.get(target, False)
+                and not snap.target_git_tracked.get(target, False)
+            ):
+                reasons.append(
+                    f"Overwriting untracked file '{target}' — no git recovery possible"
+                )
+
     return bool(reasons), reasons
 
 
@@ -232,6 +275,27 @@ def _suggest_alternatives(
             suggestions.append(
                 f"Run 'ls {' '.join(cmd.targets)}' first to see what will be deleted"
             )
+
+    if cmd.category == CommandCategory.FILE_EDIT:
+        if snap.edit_change_ratio > 0.5:
+            suggestions.append(
+                "Consider smaller, incremental edits instead of rewriting large sections"
+            )
+        if snap.edit_old_string_found is False:
+            suggestions.append(
+                "old_string not found in file — re-read the file before editing"
+            )
+
+    if cmd.category == CommandCategory.FILE_WRITE:
+        for target in cmd.targets:
+            if snap.target_exists.get(target, False):
+                if not snap.target_git_tracked.get(target, False):
+                    suggestions.append(
+                        f"Back up '{target}' before overwriting — it's not git-tracked"
+                    )
+                suggestions.append(
+                    "Consider using Edit (targeted replacement) instead of Write (full overwrite)"
+                )
 
     return suggestions
 

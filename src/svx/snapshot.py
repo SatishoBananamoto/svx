@@ -38,6 +38,45 @@ def capture(cmd: ParsedCommand, cwd: str | None = None) -> WorldSnapshot:
                         target, cwd
                     )
 
+    # File edit/write state
+    if cmd.category in (CommandCategory.FILE_EDIT, CommandCategory.FILE_WRITE):
+        for target in cmd.targets:
+            path = _resolve_path(target, cwd)
+            snap.target_exists[target] = path.exists()
+            snap.target_is_config[target] = _is_config_file(target)
+
+            if path.exists():
+                snap.target_sizes[target] = _get_size(path)
+                if snap.is_git_repo:
+                    snap.target_git_tracked[target] = _is_git_tracked(
+                        target, cwd
+                    )
+
+                # Read file content for edit analysis
+                if cmd.category == CommandCategory.FILE_EDIT:
+                    try:
+                        content = path.read_text(errors="replace")
+                        lines = content.splitlines()
+                        snap.target_line_count[target] = len(lines)
+
+                        old_string = cmd.metadata.get("old_string", "")
+                        new_string = cmd.metadata.get("new_string", "")
+                        snap.edit_old_string_found = old_string in content
+
+                        if len(content) > 0:
+                            snap.edit_change_ratio = len(old_string) / len(content)
+                        else:
+                            snap.edit_change_ratio = 1.0
+                    except (OSError, UnicodeDecodeError):
+                        snap.target_line_count[target] = 0
+
+                elif cmd.category == CommandCategory.FILE_WRITE:
+                    try:
+                        content = path.read_text(errors="replace")
+                        snap.target_line_count[target] = len(content.splitlines())
+                    except (OSError, UnicodeDecodeError):
+                        snap.target_line_count[target] = 0
+
     return snap
 
 
@@ -91,6 +130,39 @@ def _is_git_tracked(target: str, cwd: str) -> bool:
         capture_output=True, cwd=cwd, timeout=5,
     )
     return r.returncode == 0
+
+
+# File patterns that are sensitive / config files
+_CONFIG_FILENAMES = {
+    ".env", ".envrc", ".env.local", ".env.production",
+    "pyproject.toml", "setup.py", "setup.cfg",
+    "package.json", "package-lock.json", "yarn.lock",
+    "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
+    "Makefile", "Cargo.toml", "go.mod", "go.sum",
+    "tsconfig.json", "requirements.txt", "Pipfile", "Pipfile.lock",
+    ".gitignore", ".gitattributes", ".gitmodules",
+    "CLAUDE.md", ".claude.json",
+}
+
+_CONFIG_PATH_PATTERNS = {
+    ".github/workflows", ".github/actions",
+    ".circleci", ".gitlab-ci",
+    ".vscode/settings", ".idea/",
+}
+
+
+def _is_config_file(target: str) -> bool:
+    """Check if a file path points to a config/sensitive file."""
+    name = Path(target).name
+    if name in _CONFIG_FILENAMES:
+        return True
+    if name.startswith(".env"):
+        return True
+    # Check path patterns
+    for pattern in _CONFIG_PATH_PATTERNS:
+        if pattern in target:
+            return True
+    return False
 
 
 def _get_size(path: Path) -> int:

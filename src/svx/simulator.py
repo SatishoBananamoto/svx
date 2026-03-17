@@ -20,6 +20,8 @@ def simulate(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResult:
         CommandCategory.FILE_DELETE: _simulate_delete,
         CommandCategory.FILE_MOVE: _simulate_move,
         CommandCategory.FILE_PERMISSION: _simulate_permission,
+        CommandCategory.FILE_EDIT: _simulate_file_edit,
+        CommandCategory.FILE_WRITE: _simulate_file_write,
         CommandCategory.PACKAGE: _simulate_package,
         CommandCategory.PROCESS: _simulate_process,
     }
@@ -366,6 +368,148 @@ def _simulate_process(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResu
         reversibility=Reversibility.IRREVERSIBLE,
         data_loss_possible=True,
         blast_radius=len(cmd.targets),
+    )
+
+
+# ── File edits (Edit/Write tool calls) ───────────────────────────────────────
+
+
+def _simulate_file_edit(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResult:
+    """Simulate a Claude Code Edit tool call."""
+    target = cmd.targets[0] if cmd.targets else "unknown"
+    exists = snap.target_exists.get(target, False)
+    tracked = snap.target_git_tracked.get(target, False)
+    is_config = snap.target_is_config.get(target, False)
+    line_count = snap.target_line_count.get(target, 0)
+    change_ratio = snap.edit_change_ratio
+    old_found = snap.edit_old_string_found
+
+    old_len = len(cmd.metadata.get("old_string", ""))
+    new_len = len(cmd.metadata.get("new_string", ""))
+
+    effects = []
+    failure_modes = []
+
+    if not exists:
+        return SimulationResult(
+            description=f"Edit target '{target}' does not exist — will fail",
+            effects=["File not found — edit cannot proceed"],
+            failure_modes=["Edit tool will error"],
+            reversibility=Reversibility.REVERSIBLE,
+            blast_radius=0,
+        )
+
+    if old_found is False:
+        failure_modes.append("old_string not found in file — edit will fail")
+
+    # Describe the change
+    if change_ratio > 0.5:
+        effects.append(f"Major rewrite: replacing {change_ratio:.0%} of file content")
+    elif change_ratio > 0.2:
+        effects.append(f"Significant edit: replacing {change_ratio:.0%} of file content")
+    else:
+        effects.append(f"Targeted edit: replacing {change_ratio:.0%} of file content")
+
+    size_delta = new_len - old_len
+    if size_delta > 0:
+        effects.append(f"File grows by ~{size_delta} chars")
+    elif size_delta < 0:
+        effects.append(f"File shrinks by ~{abs(size_delta)} chars")
+
+    if is_config:
+        effects.append(f"WARNING: '{target}' is a config/sensitive file")
+        failure_modes.append("Config file changes can break builds, deploys, or secrets")
+
+    if tracked:
+        effects.append("File is git-tracked — recoverable via git checkout")
+    else:
+        failure_modes.append("File is NOT git-tracked — no git recovery")
+
+    # Reversibility: git-tracked files are recoverable
+    if tracked:
+        reversibility = Reversibility.REVERSIBLE
+        data_loss = False
+    else:
+        reversibility = Reversibility.PARTIALLY
+        data_loss = True
+
+    # Blast radius
+    blast = 1
+    if is_config:
+        blast += 2  # config changes ripple
+    if change_ratio > 0.5:
+        blast += 1  # major rewrites are riskier
+
+    return SimulationResult(
+        description=f"Edit '{target}' ({line_count} lines, {change_ratio:.0%} changed)",
+        effects=effects,
+        failure_modes=failure_modes,
+        reversibility=reversibility,
+        data_loss_possible=data_loss,
+        blast_radius=blast,
+    )
+
+
+def _simulate_file_write(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResult:
+    """Simulate a Claude Code Write tool call (full file create/overwrite)."""
+    target = cmd.targets[0] if cmd.targets else "unknown"
+    exists = snap.target_exists.get(target, False)
+    tracked = snap.target_git_tracked.get(target, False)
+    is_config = snap.target_is_config.get(target, False)
+    current_size = snap.target_sizes.get(target, 0)
+    current_lines = snap.target_line_count.get(target, 0)
+    new_content_len = cmd.metadata.get("content_length", 0)
+
+    effects = []
+    failure_modes = []
+
+    if exists:
+        effects.append(
+            f"OVERWRITE existing file '{target}' "
+            f"({current_lines} lines, {current_size} bytes)"
+        )
+        if tracked:
+            effects.append("Current content recoverable via git checkout")
+        else:
+            effects.append("Current content will be PERMANENTLY LOST (not git-tracked)")
+            failure_modes.append("No recovery possible for overwritten untracked file")
+
+        if is_config:
+            effects.append(f"WARNING: overwriting config/sensitive file '{target}'")
+            failure_modes.append("Config file overwrite can break builds, deploys, or secrets")
+    else:
+        effects.append(f"Create new file '{target}' ({new_content_len} chars)")
+
+    # Reversibility
+    if not exists:
+        # Creating new file — just delete it to undo
+        reversibility = Reversibility.REVERSIBLE
+        data_loss = False
+    elif tracked:
+        reversibility = Reversibility.REVERSIBLE
+        data_loss = False
+    else:
+        reversibility = Reversibility.IRREVERSIBLE
+        data_loss = True
+
+    # Blast radius
+    blast = 1
+    if exists and not tracked:
+        blast += 2  # overwriting untracked = data loss
+    if is_config:
+        blast += 2  # config changes ripple
+
+    return SimulationResult(
+        description=(
+            f"Overwrite '{target}' ({current_lines} lines)"
+            if exists
+            else f"Create new file '{target}'"
+        ),
+        effects=effects,
+        failure_modes=failure_modes,
+        reversibility=reversibility,
+        data_loss_possible=data_loss,
+        blast_radius=blast,
     )
 
 

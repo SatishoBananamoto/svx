@@ -11,6 +11,7 @@ confirmations:
   data_loss: true
   force_flags: true
   high_blast_radius: true
+  config_file_edits: true
 
 thresholds:
   # Blast radius above this requires confirmation
