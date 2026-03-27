@@ -125,6 +125,24 @@ thresholds:
   max_blast_radius_without_confirm: 5
 ```
 
+## Project Scoping
+
+SVX only guards projects you opt into — like git only works inside a `.git/` repo:
+
+```bash
+cd my-project
+svx init                    # creates .svx/ directory
+svx init --mode strict      # confirm risky ops
+svx init --mode vibe        # only block catastrophic (default)
+```
+
+Operations outside `.svx/` projects are auto-allowed.
+
+### Modes
+
+- **vibe** (default): Only BLOCK verdicts deny. CONFIRM verdicts auto-allow with logging. For when you trust the agent but want catastrophic-only protection.
+- **strict**: Both BLOCK and CONFIRM verdicts require approval. For sensitive repositories.
+
 ## Exit codes
 
 - `0` — ALLOW
