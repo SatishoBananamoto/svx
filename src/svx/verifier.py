@@ -10,6 +10,7 @@ from .schemas import (
     SimulationResult,
     VerificationResult,
     CommandCategory,
+    DenyKind,
     RiskLevel,
     Verdict,
     Reversibility,
@@ -43,6 +44,7 @@ def verify(
             simulation=sim,
             reasons=block_reasons,
             suggestions=["Do not run this command.", "Consider a safer alternative."],
+            deny_kind=DenyKind.HARD,
         )
 
     # 3. Check confirmation requirements
@@ -71,12 +73,21 @@ def verify(
     # 6. Suggestions
     suggestions.extend(_suggest_alternatives(cmd, snap, sim))
 
+    # 7. Advisory action for CONFIRM verdicts
+    deny_kind = None
+    advisory_action = None
+    if verdict == Verdict.CONFIRM:
+        advisory_action = _build_advisory_action(cmd, snap, sim)
+        deny_kind = DenyKind.ADVISORY if advisory_action else DenyKind.HARD
+
     return VerificationResult(
         verdict=verdict,
         risk_level=risk,
         simulation=sim,
         reasons=reasons,
         suggestions=suggestions,
+        deny_kind=deny_kind,
+        advisory_action=advisory_action,
     )
 
 
@@ -298,6 +309,84 @@ def _suggest_alternatives(
                 )
 
     return suggestions
+
+
+def _build_advisory_action(
+    cmd: ParsedCommand,
+    snap: WorldSnapshot,
+    sim: SimulationResult,
+) -> str | None:
+    """Build a concrete, imperative instruction for Claude.
+
+    Returns a single action Claude should take before retrying.
+    Returns None if no safe advisory exists (escalates to hard deny).
+    """
+    # ── Git operations ──
+    if cmd.category == CommandCategory.GIT:
+        if cmd.subcommand == "reset" and "--hard" in cmd.flags:
+            return "Run 'git stash' first to save your uncommitted work, then retry."
+
+        if cmd.subcommand == "push" and has_force_flags(cmd):
+            return "Use 'git push --force-with-lease' instead — it's safer and fails if remote has new commits."
+
+        if cmd.subcommand == "clean":
+            return "Run 'git clean -n' first to preview what will be deleted, then run the actual clean."
+
+        if cmd.subcommand == "branch" and "-D" in cmd.flags:
+            branch = cmd.targets[0] if cmd.targets else "the branch"
+            return f"Use 'git branch -d {branch}' instead — it refuses to delete unmerged branches."
+
+        if cmd.subcommand in ("checkout", "restore") and "--" in cmd.flags:
+            if snap.git_dirty:
+                return "Run 'git stash' first to save your work, then retry."
+            return None
+
+        if cmd.subcommand == "stash":
+            return None  # stash drop is genuinely irreversible, no workaround
+
+        if cmd.subcommand == "rebase":
+            return "Create a backup branch first with 'git branch backup-before-rebase', then retry."
+
+    # ── File deletes ──
+    if cmd.category == CommandCategory.FILE_DELETE:
+        targets_str = " ".join(cmd.targets[:3])
+        return f"Run 'ls {targets_str}' first to see what will be deleted, then retry."
+
+    # ── File edits ──
+    if cmd.category == CommandCategory.FILE_EDIT:
+        target = cmd.targets[0] if cmd.targets else ""
+
+        if snap.edit_old_string_found is False:
+            return f"Re-read '{target}' first — the content you're trying to replace doesn't match the file."
+
+        if snap.edit_change_ratio > 0.5:
+            return "Break this into smaller edits — change one section at a time instead of rewriting the whole file."
+
+        if snap.target_is_config.get(target, False):
+            return f"Read '{target}' first to verify its current content, then retry your edit."
+
+    # ── File writes ──
+    if cmd.category == CommandCategory.FILE_WRITE:
+        for target in cmd.targets:
+            if (
+                snap.target_exists.get(target, False)
+                and not snap.target_git_tracked.get(target, False)
+            ):
+                fname = target.rsplit("/", 1)[-1]
+                return f"Back up the file first with 'cp {target} {target}.bak', then retry."
+
+            if snap.target_is_config.get(target, False):
+                return f"Read '{target}' first to verify its current content, then retry."
+
+    # ── Process kills ──
+    if cmd.category == CommandCategory.PROCESS:
+        return None  # genuinely irreversible, no prep step helps
+
+    # ── Fallback: if in a dirty git repo, suggest committing first ──
+    if snap.git_dirty and sim.data_loss_possible:
+        return "Commit or stash your current changes first with 'git stash', then retry."
+
+    return None
 
 
 def _load_policies(path: Path) -> dict:

@@ -22,6 +22,11 @@ class Verdict(Enum):
     BLOCK = "block"
 
 
+class DenyKind(Enum):
+    ADVISORY = "advisory"   # Claude can fix and retry
+    HARD = "hard"           # No workaround, full stop
+
+
 class Reversibility(Enum):
     REVERSIBLE = "reversible"
     PARTIALLY = "partially_reversible"
@@ -94,6 +99,8 @@ class VerificationResult:
     simulation: SimulationResult
     reasons: list[str] = field(default_factory=list)
     suggestions: list[str] = field(default_factory=list)
+    deny_kind: DenyKind | None = None
+    advisory_action: str | None = None
 
 
 @dataclass
@@ -109,3 +116,6 @@ class AuditEntry:
     verdict: str = ""
     risk_level: str = ""
     reasons: list[str] = field(default_factory=list)
+    auto_allowed: bool = False
+    deny_kind: str | None = None
+    advisory_action: str | None = None

@@ -19,9 +19,10 @@ def log_event(
     snap: WorldSnapshot,
     result: VerificationResult,
     audit_dir: Path | None = None,
+    auto_allowed: bool = False,
 ) -> Path:
     """Write an audit entry to the log file. Returns the log file path."""
-    audit_dir = audit_dir or Path.cwd() / ".svx-audit"
+    audit_dir = audit_dir or Path.home() / ".svx-audit"
     audit_dir.mkdir(parents=True, exist_ok=True)
 
     log_file = audit_dir / "audit.jsonl"
@@ -52,6 +53,9 @@ def log_event(
         verdict=result.verdict.value,
         risk_level=result.risk_level.value,
         reasons=result.reasons,
+        auto_allowed=auto_allowed,
+        deny_kind=result.deny_kind.value if result.deny_kind else None,
+        advisory_action=result.advisory_action,
     )
 
     with open(log_file, "a") as f:

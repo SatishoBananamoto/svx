@@ -107,7 +107,11 @@ def _git_current_branch(cwd: str) -> str | None:
 
 def _git_is_dirty(cwd: str) -> bool:
     result = _run(["git", "status", "--porcelain"], cwd)
-    return bool(result)
+    if not result:
+        return False
+    # Ignore svx's own audit directory
+    lines = [l for l in result.splitlines() if not l.strip().endswith(".svx-audit/")]
+    return bool(lines)
 
 
 def _git_untracked_count(cwd: str) -> int:

@@ -49,9 +49,9 @@ def _simulate_git(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResult:
         return _sim_git_branch_delete(cmd, snap)
     elif sub == "rebase":
         return _sim_git_rebase(cmd, snap)
-    elif sub == "stash" and (not cmd.targets or cmd.targets[0] == "drop"):
+    elif sub == "stash" and cmd.targets and cmd.targets[0] == "drop":
         return _sim_git_stash_drop(cmd, snap)
-    elif sub in ("add", "commit", "pull", "fetch", "merge", "tag"):
+    elif sub in ("add", "commit", "pull", "fetch", "merge", "tag", "stash"):
         return _sim_git_safe_mutate(cmd, snap)
     else:
         return SimulationResult(
@@ -119,13 +119,16 @@ def _sim_git_reset(cmd: ParsedCommand, snap: WorldSnapshot) -> SimulationResult:
         if snap.git_dirty:
             effects.append("Working tree has uncommitted changes that will be destroyed")
 
+        # Only flag data loss if there's actually something to lose
+        has_changes = bool(diff_stat or staged_stat or snap.git_dirty)
+
         return SimulationResult(
             description="Hard reset — destroys all uncommitted changes",
-            effects=effects or ["All uncommitted work will be lost"],
-            failure_modes=["No recovery without reflog (and only within gc window)"],
-            reversibility=Reversibility.IRREVERSIBLE,
-            data_loss_possible=True,
-            blast_radius=snap.git_staged_count + 5,
+            effects=effects or (["All uncommitted work will be lost"] if has_changes else ["No uncommitted changes detected"]),
+            failure_modes=["No recovery without reflog (and only within gc window)"] if has_changes else [],
+            reversibility=Reversibility.IRREVERSIBLE if has_changes else Reversibility.REVERSIBLE,
+            data_loss_possible=has_changes,
+            blast_radius=(snap.git_staged_count + 5) if has_changes else 0,
         )
 
     return SimulationResult(

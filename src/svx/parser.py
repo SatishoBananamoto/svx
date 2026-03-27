@@ -26,7 +26,7 @@ PROCESS_PROGRAMS = {"kill", "killall", "pkill"}
 NETWORK_PROGRAMS = {"curl", "wget"}
 
 # Flags that escalate risk
-FORCE_FLAGS = {"--force", "-f", "--hard", "--no-verify", "-D", "--delete"}
+FORCE_FLAGS = {"--force", "-f", "--no-verify", "-D", "--delete"}
 
 
 def parse_command(raw: str) -> list[ParsedCommand]:

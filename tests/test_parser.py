@@ -26,7 +26,7 @@ def test_git_reset_hard():
     cmd = cmds[0]
     assert cmd.subcommand == "reset"
     assert "--hard" in cmd.flags
-    assert has_force_flags(cmd)
+    assert not has_force_flags(cmd)  # --hard is a mode flag, not a force override
 
 
 def test_rm_recursive():
