@@ -65,6 +65,13 @@ def main():
     audit_parser = sub.add_parser("audit", help="View audit log")
     audit_parser.add_argument("--tail", type=int, default=10, help="Number of entries")
 
+    # svx init (initialize .svx/ in current project)
+    init_parser = sub.add_parser("init", help="Initialize SVX guarding for this project")
+    init_parser.add_argument(
+        "--mode", choices=["vibe", "strict"], default="vibe",
+        help="vibe = only block catastrophic; strict = confirm risky ops"
+    )
+
     # svx serve (MCP server mode)
     sub.add_parser("serve", help="Run as MCP server (stdio transport)")
 
@@ -84,6 +91,8 @@ def main():
         _cmd_check(args)
     elif args.subcommand == "hook":
         _cmd_hook()
+    elif args.subcommand == "init":
+        _cmd_init(args)
     elif args.subcommand == "audit":
         _cmd_audit(args)
     elif args.subcommand == "serve":
@@ -93,6 +102,36 @@ def main():
     else:
         parser.print_help()
         sys.exit(0)
+
+
+def _cmd_init(args):
+    """Initialize SVX guarding for the current project."""
+    svx_dir = Path.cwd() / ".svx"
+    if svx_dir.exists():
+        print(f"{YELLOW}svx already initialized in {Path.cwd()}{RESET}")
+        sys.exit(0)
+
+    svx_dir.mkdir()
+    config_path = svx_dir / "config.yaml"
+    config_path.write_text(f"mode: {args.mode}\n")
+
+    # Add .svx/ to .gitignore if git repo
+    gitignore = Path.cwd() / ".gitignore"
+    if (Path.cwd() / ".git").exists():
+        existing = gitignore.read_text() if gitignore.exists() else ""
+        if ".svx/" not in existing:
+            with open(gitignore, "a") as f:
+                if existing and not existing.endswith("\n"):
+                    f.write("\n")
+                f.write(".svx/\n")
+
+    print(f"{GREEN}svx initialized{RESET} in {Path.cwd()}")
+    print(f"  Mode: {args.mode}")
+    print(f"  Config: {config_path}")
+    if args.mode == "vibe":
+        print(f"  {DIM}Only catastrophic operations will be blocked.{RESET}")
+    else:
+        print(f"  {DIM}Risky operations will require confirmation.{RESET}")
 
 
 def _cmd_check(args):
@@ -129,6 +168,29 @@ def _cmd_check(args):
 
 
 _INTERCEPTED_TOOLS = {"Bash", "Edit", "Write"}
+
+
+def _any_target_in_svx_project(commands: list) -> bool:
+    """Check if any command targets a file inside a .svx/-initialized project."""
+    for cmd in commands:
+        for target in cmd.targets:
+            path = Path(target).resolve() if target else None
+            if path and _find_svx_root(path):
+                return True
+    return False
+
+
+def _find_svx_root(path: Path) -> Path | None:
+    """Walk up from path looking for a .svx/ directory."""
+    current = path if path.is_dir() else path.parent
+    for _ in range(50):  # safety limit
+        if (current / ".svx").is_dir():
+            return current
+        parent = current.parent
+        if parent == current:
+            break
+        current = parent
+    return None
 
 
 def _cmd_hook():
@@ -177,10 +239,18 @@ def _cmd_hook():
     from .schemas import DenyKind
     from .config import load_config
 
-    if load_config().get("mode") == "passthrough":
+    config = load_config()
+    if config.get("mode") == "passthrough":
         print(json.dumps({}))
         sys.exit(0)
 
+    # Project scoping: only guard directories with .svx/ present.
+    # No .svx/ directory = no guarding. Like git without .git/.
+    if not _any_target_in_svx_project(commands):
+        print(json.dumps({}))
+        sys.exit(0)
+
+    vibe = config.get("mode") == "vibe"
     worst_verdict = Verdict.ALLOW
     worst_cmd = None
     worst_result = None
@@ -208,7 +278,10 @@ def _cmd_hook():
             worst_cmd = cmd
             worst_result = result
 
-    # In advisor mode: CONFIRM becomes deny with advisory (not ask)
+    # Vibe mode: only BLOCK verdicts deny. CONFIRM becomes allow-with-log.
+    if vibe and worst_verdict == Verdict.CONFIRM:
+        worst_verdict = Verdict.ALLOW
+
     _emit_hook_output(worst_verdict, worst_cmd, worst_result)
     sys.exit(0)
 
