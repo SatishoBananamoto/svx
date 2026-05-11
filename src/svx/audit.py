@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,6 +16,21 @@ from .schemas import (
 )
 
 
+def get_audit_dir(audit_dir: Path | None = None) -> Path:
+    """Return the configured audit directory."""
+    if audit_dir is not None:
+        return audit_dir
+    if configured := os.environ.get("SVX_AUDIT_DIR"):
+        return Path(configured).expanduser()
+    return Path.home() / ".svx-audit"
+
+
+def _write_entry(log_file: Path, entry: AuditEntry) -> Path:
+    with open(log_file, "a", encoding="utf-8") as f:
+        f.write(json.dumps(asdict(entry), default=str) + "\n")
+    return log_file
+
+
 def log_event(
     cmd: ParsedCommand,
     snap: WorldSnapshot,
@@ -22,11 +39,6 @@ def log_event(
     auto_allowed: bool = False,
 ) -> Path:
     """Write an audit entry to the log file. Returns the log file path."""
-    audit_dir = audit_dir or Path.home() / ".svx-audit"
-    audit_dir.mkdir(parents=True, exist_ok=True)
-
-    log_file = audit_dir / "audit.jsonl"
-
     entry = AuditEntry(
         timestamp=datetime.now(timezone.utc).isoformat(),
         command=cmd.raw,
@@ -58,7 +70,19 @@ def log_event(
         advisory_action=result.advisory_action,
     )
 
-    with open(log_file, "a") as f:
-        f.write(json.dumps(asdict(entry), default=str) + "\n")
+    preferred = get_audit_dir(audit_dir)
+    fallback = Path(tempfile.gettempdir()) / "svx-audit"
+    tried = set()
 
-    return log_file
+    for directory in (preferred, fallback):
+        if directory in tried:
+            continue
+        tried.add(directory)
+        log_file = directory / "audit.jsonl"
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            return _write_entry(log_file, entry)
+        except OSError:
+            continue
+
+    return preferred / "audit.jsonl"

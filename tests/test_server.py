@@ -6,7 +6,15 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from svx.server import assess_command, assess_edit, assess_write, get_audit
+
+
+@pytest.fixture(autouse=True)
+def isolated_audit_dir(tmp_path, monkeypatch):
+    """Keep server tests from writing to the user's audit log."""
+    monkeypatch.setenv("SVX_AUDIT_DIR", str(tmp_path / "audit"))
 
 
 def test_assess_command_safe():
@@ -124,9 +132,17 @@ def test_assess_write_overwrite():
 def test_get_audit_empty():
     """get_audit should handle missing audit log gracefully."""
     result = get_audit(count=5)
-    # May or may not have entries depending on test order,
-    # but should not crash
     assert "entries" in result
+
+
+def test_assess_command_writes_configured_audit_dir(tmp_path, monkeypatch):
+    """MCP tools should honor SVX_AUDIT_DIR instead of hardcoding home."""
+    audit_dir = tmp_path / "custom-audit"
+    monkeypatch.setenv("SVX_AUDIT_DIR", str(audit_dir))
+
+    assess_command("git status")
+
+    assert (audit_dir / "audit.jsonl").exists()
 
 
 def test_assess_command_result_structure():

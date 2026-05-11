@@ -80,6 +80,10 @@ svx hook  # reads tool input from stdin
 svx audit --tail 20
 ```
 
+Audit entries are written to `~/.svx-audit/audit.jsonl` by default. Set
+`SVX_AUDIT_DIR=/path/to/audit` when running in CI, tests, or a sandbox where
+the home audit directory is not writable.
+
 ## What it catches
 
 | Command | Verdict | Why |

@@ -7,6 +7,14 @@
 
 ---
 
+## 2026-05-11 Codex Update
+
+The version mismatch noted below is fixed: `svx.__version__` now matches `pyproject.toml` at `0.3.0`. MCP server assessment tests also no longer depend on writing to `~/.svx-audit`; audit logging honors `SVX_AUDIT_DIR` and falls back to `/tmp/svx-audit` if the preferred path is unavailable.
+
+Current local verification: `python3 -B -m pytest -q -p no:cacheprovider` passes with 66 tests, `python3 -m compileall src tests` passes, and `git diff --check` passes. The B- review still stands until the Bash file-write bypass, threat-model documentation, and false-positive work are addressed.
+
+---
+
 ## Summary
 
 SVX (Simulate, Verify, Execute) is a deterministic safety layer for AI coding agents. It intercepts tool calls via Claude Code PreToolUse hooks, simulates their impact by snapshotting world state, and produces verdicts: allow, confirm, or block. No LLM calls — pure rule-based analysis. It's been battle-tested through 1,864+ audit entries from real usage building the scroll project. The architecture is sound and the core works, but real-world usage revealed significant usability problems (false positives, no context awareness, inconsistent boundaries) that are documented in SVX-REWORK.md.

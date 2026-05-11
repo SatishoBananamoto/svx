@@ -12,7 +12,7 @@ from .parser import parse_command
 from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
-from .audit import log_event
+from .audit import get_audit_dir, log_event
 from .schemas import Verdict, RiskLevel, ParsedCommand, CommandCategory
 
 
@@ -372,7 +372,7 @@ def _check_retry_count(
 ) -> bool:
     """Return True if this command has been denied too many times recently."""
     from datetime import datetime, timezone
-    audit_file = Path.home() / ".svx-audit" / "audit.jsonl"
+    audit_file = get_audit_dir() / "audit.jsonl"
     if not audit_file.exists():
         return False
 
@@ -459,7 +459,7 @@ def _cmd_serve():
 
 def _cmd_audit(args):
     """Print recent audit entries."""
-    log_file = Path.home() / ".svx-audit" / "audit.jsonl"
+    log_file = get_audit_dir() / "audit.jsonl"
     if not log_file.exists():
         print("No audit log found.")
         return
@@ -516,13 +516,13 @@ def _cmd_watch(args):
     if args.dir:
         search_dirs.append(Path(args.dir))
     else:
-        search_dirs.append(Path.home() / ".svx-audit")
+        search_dirs.append(get_audit_dir())
 
     log_files = [d / "audit.jsonl" for d in search_dirs if (d / "audit.jsonl").exists()]
 
-    # Fallback: watch home dir audit if nothing found
+    # Fallback: watch the configured audit path if nothing exists yet
     if not log_files:
-        fallback = Path.home() / ".svx-audit" / "audit.jsonl"
+        fallback = get_audit_dir() / "audit.jsonl"
         log_files = [fallback]
 
     # Print header

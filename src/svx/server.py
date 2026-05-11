@@ -9,7 +9,7 @@ from .schemas import CommandCategory, ParsedCommand, Verdict
 from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
-from .audit import log_event
+from .audit import get_audit_dir, log_event
 
 server = FastMCP(
     name="svx",
@@ -156,7 +156,7 @@ def get_audit(count: int = 10) -> dict:
     import json
     from pathlib import Path
 
-    log_file = Path.cwd() / ".svx-audit" / "audit.jsonl"
+    log_file = get_audit_dir() / "audit.jsonl"
     if not log_file.exists():
         return {"entries": [], "message": "No audit log found."}
 
