@@ -108,6 +108,15 @@ svx resume
 `svx resume` flips it back to `false`. For one-off shell sessions or CI, set
 `SVX_DISABLED=1` to make the hook return an allow response immediately.
 
+To prune stale session cache entries (`.svx/session.json`) for the current project:
+
+```bash
+svx session-prune --max-age-hours 1
+```
+
+This removes tracked read entries older than the supplied age (default: 12 hours)
+and prints the number of records removed.
+
 ### View audit log
 
 ```bash
