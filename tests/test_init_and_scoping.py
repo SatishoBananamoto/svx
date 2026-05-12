@@ -1,12 +1,17 @@
-"""Tests for svx init, project scoping, and vibe mode."""
+"""Tests for svx init, project scoping, and hook pause/resume."""
 
-import os
-from pathlib import Path
+import sys
 
 import pytest
 
-from svx.cli import _find_svx_root, _any_target_in_svx_project
-from svx.config import load_config, is_vibe_mode
+from svx.cli import _find_svx_root, _any_target_in_svx_project, main
+from svx.config import (
+    is_disabled_by_env,
+    is_paused,
+    is_vibe_mode,
+    load_config,
+    load_project_config,
+)
 from svx.schemas import ParsedCommand, CommandCategory
 
 
@@ -92,3 +97,56 @@ class TestConfig:
     def test_missing_mode_defaults_to_vibe(self):
         """Missing mode key defaults to vibe."""
         assert is_vibe_mode({}) is True
+
+    def test_project_config_overrides_home_config(self, tmp_path, monkeypatch):
+        """Project-local mode should override global mode inside that project."""
+        home = tmp_path / "home"
+        project = tmp_path / "project"
+        home.mkdir()
+        (home / ".svx.yaml").write_text("mode: strict\n")
+        (project / ".svx").mkdir(parents=True)
+        (project / ".svx" / "config.yaml").write_text("mode: vibe\n")
+
+        monkeypatch.setenv("HOME", str(home))
+
+        assert load_config(cwd=project)["mode"] == "vibe"
+
+    def test_env_override_disables_hook(self, monkeypatch):
+        """SVX_DISABLED=1 should be treated as an explicit bypass."""
+        monkeypatch.setenv("SVX_DISABLED", "1")
+
+        assert is_disabled_by_env() is True
+
+    def test_pause_resume_cli_toggles_project_config(self, tmp_path, monkeypatch):
+        """pause/resume should toggle a project-local paused flag."""
+        (tmp_path / ".svx").mkdir()
+        config_path = tmp_path / ".svx" / "config.yaml"
+        config_path.write_text("mode: strict\n")
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["svx", "pause"])
+        main()
+
+        paused = load_project_config(tmp_path)
+        assert paused["mode"] == "strict"
+        assert paused["paused"] is True
+        assert is_paused(paused) is True
+
+        monkeypatch.setattr(sys, "argv", ["svx", "resume"])
+        main()
+
+        resumed = load_project_config(tmp_path)
+        assert resumed["mode"] == "strict"
+        assert resumed["paused"] is False
+        assert is_paused(resumed) is False
+
+    def test_pause_requires_initialized_project(self, tmp_path, monkeypatch):
+        """pause should not create .svx implicitly."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["svx", "pause"])
+
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+        assert exc.value.code == 1
+        assert not (tmp_path / ".svx").exists()

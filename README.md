@@ -97,6 +97,17 @@ To remove only the SVX hook entries later:
 svx disable
 ```
 
+To temporarily bypass the hook without editing Claude Code settings:
+
+```bash
+svx pause
+svx resume
+```
+
+`svx pause` writes `paused: true` in the project-local `.svx/config.yaml`.
+`svx resume` flips it back to `false`. For one-off shell sessions or CI, set
+`SVX_DISABLED=1` to make the hook return an allow response immediately.
+
 ### View audit log
 
 ```bash
@@ -166,7 +177,10 @@ svx init --mode strict      # confirm risky ops
 svx init --mode vibe        # only block catastrophic (default)
 ```
 
-Operations outside `.svx/` projects are auto-allowed.
+Operations outside `.svx/` projects are auto-allowed. Project-local
+`.svx/config.yaml` overrides `~/.svx.yaml`, so `svx init --mode strict`,
+`svx pause`, and `svx resume` apply to the current project without changing
+global defaults.
 
 ## Safety Boundary
 
@@ -180,6 +194,7 @@ when containment is required.
 
 - **vibe** (default): Only BLOCK verdicts deny. CONFIRM verdicts auto-allow with logging. For when you trust the agent but want catastrophic-only protection.
 - **strict**: Both BLOCK and CONFIRM verdicts require approval. For sensitive repositories.
+- **paused**: `svx pause` makes the hook allow project actions until `svx resume` is run. `SVX_DISABLED=1` bypasses the hook from the environment.
 
 ## Exit codes
 

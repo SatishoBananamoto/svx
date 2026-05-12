@@ -4,14 +4,26 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — Bash file-write boundary added
-**Repo**: Ready to commit. 86 tests passing.
+**Last session**: 2026-05-12 — pause/resume added
+**Repo**: Ready to commit. 92 tests passing.
 
 ---
 
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex added the easy pause/resume slice. `svx pause` and `svx resume` now
+toggle a project-local `paused` flag in `.svx/config.yaml`, the hook checks
+that flag after project scoping, and `SVX_DISABLED=1` provides an environment
+bypass for one-off runs. Config loading now merges defaults, `~/.svx.yaml`, and
+project-local config in that order, so `svx init --mode strict` is honored by
+the hook.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 92
+tests.
+
+Previous session (2026-05-12):
 
 Codex closed the first Bash file-write bypass slice. Bash stdout redirects
 (`>`, `>>`), heredoc-with-redirect commands, and `tee` targets now parse as
@@ -62,7 +74,7 @@ svx is meant to be a PreToolUse hook for Claude Code. The hook binary exists (`s
 
 ### What NOT to do
 
-- Don't chase the old flaky-test note without reproducing it — current local suite is 86 passing
+- Don't chase the old flaky-test note without reproducing it — current local suite is 92 passing
 - Don't add new policies before the existing ones are validated in real use
 - Don't make the hook mandatory — opt-in per project via `svx init`
 
@@ -86,7 +98,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 
 - [ ] Session context for read-before-write — track reads in `.svx/session.json`
 - [x] Consistent Bash boundary — detect file-writing patterns (cat >, heredoc, tee)
-- [ ] Easy pause/resume — `svx pause` / `svx resume` + env var `SVX_DISABLED=1`
+- [x] Easy pause/resume — `svx pause` / `svx resume` + env var `SVX_DISABLED=1`
 - [ ] Config file risk calibration — `.gitignore` ≠ `settings.json`
 - [ ] Continue
 
@@ -119,6 +131,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Hook enable/disable helper — 2026-05-12 · 72 tests passing
 - [x] hookSpecificOutput validation — 2026-05-12 · 76 tests passing
 - [x] Bash file-write boundary — 2026-05-12 · redirects, heredoc, tee, `.claude/settings*` hard block, 86 tests passing
+- [x] Pause/resume — 2026-05-12 · project-local paused flag, `SVX_DISABLED=1`, project config honored by hook, 92 tests passing
 
 </details>
 
@@ -178,6 +191,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** Bash-level file writes that bypassed the Write tool simulator.
 - **Completed:** Redirect/heredoc/tee detection, reuse of `FILE_WRITE` verification, `.claude/settings*` hard-block policy, README/review/tracker updates, and hook regressions for strict advisory deny plus vibe-mode settings block.
 - **State:** 86 tests passing. Next: session context/read-before-write or pause/resume.
+
+### 2026-05-12 — Codex pause/resume pass
+
+- **Worked on:** Project-local escape hatch without hand-editing Claude Code settings.
+- **Completed:** `svx pause`, `svx resume`, `SVX_DISABLED=1`, project config merge order, hook paused-state bypass, README/review/tracker updates, and regressions for CLI toggles plus hook bypasses.
+- **State:** 92 tests passing. Next: session context/read-before-write or config file risk calibration.
 
 ---
 

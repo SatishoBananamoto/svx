@@ -186,3 +186,67 @@ def test_cmd_hook_blocks_bash_write_to_claude_settings(
     assert hook_output["permissionDecision"] == "deny"
     assert "[svx BLOCKED]" in hook_output["permissionDecisionReason"]
     assert "Claude Code settings" in hook_output["permissionDecisionReason"]
+
+
+def test_cmd_hook_allows_when_env_disabled(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    (tmp_path / ".svx").mkdir()
+    target = tmp_path / "notes.txt"
+    target.write_text("old content\n")
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".svx.yaml").write_text("mode: strict\n")
+
+    hook_input = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(target),
+            "content": "new content\n",
+        },
+        "hook_event_name": "PreToolUse",
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("SVX_DISABLED", "1")
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
+
+    with pytest.raises(SystemExit) as exc:
+        _cmd_hook()
+
+    assert exc.value.code == 0
+    assert json.loads(capsys.readouterr().out) == {}
+
+
+def test_cmd_hook_allows_when_project_paused(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    svx_dir = tmp_path / ".svx"
+    svx_dir.mkdir()
+    (svx_dir / "config.yaml").write_text("mode: strict\npaused: true\n")
+    target = tmp_path / "notes.txt"
+    target.write_text("old content\n")
+
+    hook_input = {
+        "tool_name": "Write",
+        "tool_input": {
+            "file_path": str(target),
+            "content": "new content\n",
+        },
+        "hook_event_name": "PreToolUse",
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
+
+    with pytest.raises(SystemExit) as exc:
+        _cmd_hook()
+
+    assert exc.value.code == 0
+    assert json.loads(capsys.readouterr().out) == {}

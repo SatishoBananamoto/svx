@@ -13,6 +13,14 @@ from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
 from .audit import get_audit_dir, log_event
+from .config import (
+    find_svx_root,
+    is_disabled_by_env,
+    is_paused,
+    load_config,
+    load_project_config,
+    save_project_config,
+)
 from .schemas import Verdict, RiskLevel, ParsedCommand, CommandCategory
 from .hook_config import (
     disable_svx_hook,
@@ -82,6 +90,8 @@ def main():
     # svx enable/disable (manage local Claude Code hook settings)
     sub.add_parser("enable", help="Enable the SVX Claude Code hook in this project")
     sub.add_parser("disable", help="Disable the SVX Claude Code hook in this project")
+    sub.add_parser("pause", help="Temporarily pause the SVX hook in this project")
+    sub.add_parser("resume", help="Resume the SVX hook in this project")
 
     # svx serve (MCP server mode)
     sub.add_parser("serve", help="Run as MCP server (stdio transport)")
@@ -108,6 +118,10 @@ def main():
         _cmd_enable()
     elif args.subcommand == "disable":
         _cmd_disable()
+    elif args.subcommand == "pause":
+        _cmd_pause()
+    elif args.subcommand == "resume":
+        _cmd_resume()
     elif args.subcommand == "audit":
         _cmd_audit(args)
     elif args.subcommand == "serve":
@@ -194,6 +208,38 @@ def _cmd_disable():
         print(f"  Backup: {backup_path}")
 
 
+def _cmd_pause():
+    """Pause SVX hook enforcement for the current project."""
+    _set_project_paused(True)
+
+
+def _cmd_resume():
+    """Resume SVX hook enforcement for the current project."""
+    _set_project_paused(False)
+
+
+def _set_project_paused(paused: bool):
+    root = _find_svx_root(Path.cwd())
+    if root is None:
+        action = "pause" if paused else "resume"
+        print(
+            f"{RED}svx {action} failed:{RESET} run 'svx init' first",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    config = load_project_config(root)
+    config["paused"] = paused
+    path = save_project_config(config, root)
+    if paused:
+        print(f"{YELLOW}svx paused{RESET} for {root}")
+        print(f"  Config: {path}")
+        print(f"  {DIM}Run 'svx resume' to re-enable hook checks.{RESET}")
+    else:
+        print(f"{GREEN}svx resumed{RESET} for {root}")
+        print(f"  Config: {path}")
+
+
 def _cmd_check(args):
     """Analyze a command and print the verdict."""
     commands = parse_command(args.command)
@@ -232,25 +278,24 @@ _INTERCEPTED_TOOLS = {"Bash", "Edit", "Write"}
 
 def _any_target_in_svx_project(commands: list) -> bool:
     """Check if any command targets a file inside a .svx/-initialized project."""
+    return bool(_svx_roots_for_targets(commands))
+
+
+def _svx_roots_for_targets(commands: list) -> list[Path]:
+    """Return unique .svx project roots for command targets."""
+    roots = []
     for cmd in commands:
         for target in cmd.targets:
             path = Path(target).resolve() if target else None
-            if path and _find_svx_root(path):
-                return True
-    return False
+            root = _find_svx_root(path) if path else None
+            if root and root not in roots:
+                roots.append(root)
+    return roots
 
 
 def _find_svx_root(path: Path) -> Path | None:
     """Walk up from path looking for a .svx/ directory."""
-    current = path if path.is_dir() else path.parent
-    for _ in range(50):  # safety limit
-        if (current / ".svx").is_dir():
-            return current
-        parent = current.parent
-        if parent == current:
-            break
-        current = parent
-    return None
+    return find_svx_root(path)
 
 
 def _cmd_hook():
@@ -281,6 +326,10 @@ def _cmd_hook():
 
     tool_input = hook_input.get("tool_input", {})
 
+    if is_disabled_by_env():
+        print(json.dumps({}))
+        sys.exit(0)
+
     # Build command list depending on tool type
     if tool_name == "Bash":
         command = tool_input.get("command", "")
@@ -296,21 +345,26 @@ def _cmd_hook():
         print(json.dumps({}))
         sys.exit(0)
 
-    from .schemas import DenyKind
-    from .config import load_config
-
-    config = load_config()
-    if config.get("mode") == "passthrough":
-        print(json.dumps({}))
-        sys.exit(0)
-
     # Project scoping: only guard directories with .svx/ present.
     # No .svx/ directory = no guarding. Like git without .git/.
-    if not _any_target_in_svx_project(commands):
+    roots = _svx_roots_for_targets(commands)
+    if not roots:
         print(json.dumps({}))
         sys.exit(0)
 
-    vibe = config.get("mode") == "vibe"
+    from .schemas import DenyKind
+
+    configs = [load_config(cwd=root) for root in roots]
+    active_configs = [
+        config
+        for config in configs
+        if config.get("mode") != "passthrough" and not is_paused(config)
+    ]
+    if not active_configs:
+        print(json.dumps({}))
+        sys.exit(0)
+
+    vibe = all(config.get("mode") == "vibe" for config in active_configs)
     worst_verdict = Verdict.ALLOW
     worst_cmd = None
     worst_result = None

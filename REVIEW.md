@@ -7,6 +7,20 @@
 
 ---
 
+## 2026-05-12 Codex Update — Pause/Resume
+
+The easy pause/resume gap is now covered without requiring manual edits to
+`.claude/settings.local.json`. `svx pause` and `svx resume` toggle a
+project-local `paused` flag in `.svx/config.yaml`, and `SVX_DISABLED=1` gives a
+process-level bypass for one-off runs. The hook now merges defaults, global
+`~/.svx.yaml`, and project-local config in that order.
+
+Current local verification: `python3 -B -m pytest -q -p no:cacheprovider`
+passes with 92 tests. Remaining high-value work: session context/read-before-write
+and config-file risk calibration.
+
+---
+
 ## 2026-05-12 Codex Update
 
 The common Bash file-write bypass now has initial coverage. `parser.py` routes
