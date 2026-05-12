@@ -31,6 +31,8 @@ User disconnected the SVX MCP server. The PreToolUse hook kept running because i
 ### Problem 6: `config_file_edits` Is Too Broad
 The verifier flags ANY edit to a "config file" (pyproject.toml, .gitignore, __init__.py, settings.json). These have wildly different risk profiles. `.gitignore` in a new project is zero risk. `settings.json` with credentials is high risk. Same policy covers both.
 
+**Status (2026-05-12):** Partially resolved. `.gitignore`, `.gitattributes`, and `.gitmodules` are no longer treated as config-risk by default, while sensitive files (for example `.env`) remain in the config-risk path. `svx:test_file_edit.py` now includes explicit `.gitignore` non-config coverage.
+
 ## Current Architecture
 
 ```

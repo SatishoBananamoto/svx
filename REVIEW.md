@@ -7,6 +7,18 @@
 
 ---
 
+## 2026-05-12 Codex Update — Config File Risk Calibration
+
+Config-risk calibration moved from broad classification to a specific rule set:
+`.gitignore`, `.gitattributes`, and `.gitmodules` are no longer treated as high-risk
+config edits by default, while sensitive files like `.env` still remain in the higher
+risk path. This reduces false positives without weakening protection for credential-like
+files.
+
+Current local verification: `python3 -B -m pytest -q -p no:cacheprovider` passes with 93 tests.
+
+---
+
 ## 2026-05-12 Codex Update — Pause/Resume
 
 The easy pause/resume gap is now covered without requiring manual edits to
@@ -16,8 +28,7 @@ process-level bypass for one-off runs. The hook now merges defaults, global
 `~/.svx.yaml`, and project-local config in that order.
 
 Current local verification: `python3 -B -m pytest -q -p no:cacheprovider`
-passes with 92 tests. Remaining high-value work: session context/read-before-write
-and config-file risk calibration.
+passes with 92 tests. Remaining high-value work: session context/read-before-write.
 
 ---
 

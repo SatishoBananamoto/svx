@@ -4,14 +4,23 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — pause/resume added
-**Repo**: Ready to commit. 92 tests passing.
+**Last session**: 2026-05-12 — config file risk calibration update
+**Repo**: Ready to commit.
 
 ---
 
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex resolved `.gitignore` from the high-risk config bucket. `snapshot.py` now
+excludes `.gitignore`, `.gitattributes`, and `.gitmodules` from `config_file_edits`
+confirmation-by-default, and targeted verification now covers the non-config
+classification for `.gitignore` edits plus keep-confirms for `.env`.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 93 tests.
+
+Previous session (2026-05-12):
 
 Codex added the easy pause/resume slice. `svx pause` and `svx resume` now
 toggle a project-local `paused` flag in `.svx/config.yaml`, the hook checks
@@ -99,14 +108,14 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [ ] Session context for read-before-write — track reads in `.svx/session.json`
 - [x] Consistent Bash boundary — detect file-writing patterns (cat >, heredoc, tee)
 - [x] Easy pause/resume — `svx pause` / `svx resume` + env var `SVX_DISABLED=1`
-- [ ] Config file risk calibration — `.gitignore` ≠ `settings.json`
+- [x] Config file risk calibration — `.gitignore` ≠ `settings.json`
 - [ ] Continue
 
 ### Test health
 
 - [x] Fix MCP server audit-path test failures — 2026-05-11 · `SVX_AUDIT_DIR`, `/tmp/svx-audit` fallback, 66 tests passing
 - [x] Fix runtime/package version mismatch — 2026-05-11 · `svx.__version__ == 0.3.0`
-- [ ] Add tests for file edit simulation edge cases
+- [x] Add tests for file edit simulation edge cases
 - [ ] Continue
 
 ### Done
@@ -132,6 +141,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] hookSpecificOutput validation — 2026-05-12 · 76 tests passing
 - [x] Bash file-write boundary — 2026-05-12 · redirects, heredoc, tee, `.claude/settings*` hard block, 86 tests passing
 - [x] Pause/resume — 2026-05-12 · project-local paused flag, `SVX_DISABLED=1`, project config honored by hook, 92 tests passing
+- [x] Config file risk calibration — 2026-05-12 — `.gitignore` no longer treated as config by default, 93 tests passing
 
 </details>
 

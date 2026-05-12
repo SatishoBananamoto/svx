@@ -173,6 +173,17 @@ def test_edit_env_file_confirms():
     assert any("config" in r.lower() for r in result.reasons)
 
 
+def test_edit_gitignore_allows():
+    """Editing .gitignore should not require confirmation by default."""
+    cmd = _make_edit_cmd(".gitignore", "old", "new")
+    snap = _snap_for_edit(".gitignore", tracked=True, is_config=False, change_ratio=0.02)
+    sim = simulate(cmd, snap)
+    result = verify(cmd, snap, sim)
+
+    assert result.verdict == Verdict.ALLOW
+    assert all("config" not in reason.lower() for reason in result.reasons)
+
+
 # ── Write tool tests ────────────────────────────────────────────────────────
 
 
@@ -303,7 +314,7 @@ def test_snapshot_detects_missing_old_string():
 
 
 def test_snapshot_detects_config_file():
-    """Snapshot should flag config files."""
+    """Snapshot should flag config files and not flag .gitignore."""
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".toml", prefix="pyproject", delete=False, dir="/tmp"
     ) as f:
@@ -312,10 +323,16 @@ def test_snapshot_detects_config_file():
         tmp_path = f.name
 
     try:
-        # Use a path that looks like pyproject.toml
         cmd = _make_edit_cmd("pyproject.toml", "test", "new")
         snap = _snap_for_edit("pyproject.toml", is_config=True)
         assert snap.target_is_config["pyproject.toml"] is True
+
+        with tempfile.TemporaryDirectory() as td:
+            gitignore = Path(td) / ".gitignore"
+            gitignore.write_text("*.pyc\n")
+            cmd = _make_edit_cmd(str(gitignore), "*.pyc", "*.swp")
+            real_snap = capture(cmd, cwd=td)
+            assert real_snap.target_is_config.get(str(gitignore), False) is False
     finally:
         os.unlink(tmp_path)
 

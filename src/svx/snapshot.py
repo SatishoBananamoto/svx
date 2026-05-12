@@ -136,7 +136,7 @@ def _is_git_tracked(target: str, cwd: str) -> bool:
     return r.returncode == 0
 
 
-# File patterns that are sensitive / config files
+# File patterns that are sensitive / config files (higher-risk)
 _CONFIG_FILENAMES = {
     ".env", ".envrc", ".env.local", ".env.production",
     "pyproject.toml", "setup.py", "setup.cfg",
@@ -144,7 +144,6 @@ _CONFIG_FILENAMES = {
     "Dockerfile", "docker-compose.yml", "docker-compose.yaml",
     "Makefile", "Cargo.toml", "go.mod", "go.sum",
     "tsconfig.json", "requirements.txt", "Pipfile", "Pipfile.lock",
-    ".gitignore", ".gitattributes", ".gitmodules",
     "CLAUDE.md", ".claude.json",
 }
 
@@ -156,8 +155,19 @@ _CONFIG_PATH_PATTERNS = {
 }
 
 
+def _is_low_risk_config_file(target: str) -> bool:
+    """Return True for config-like files that should not force confirmation by default."""
+    return Path(target).name in {
+        ".gitignore",
+        ".gitattributes",
+        ".gitmodules",
+    }
+
+
 def _is_config_file(target: str) -> bool:
-    """Check if a file path points to a config/sensitive file."""
+    """Check if a file path points to a high-risk config/sensitive file."""
+    if _is_low_risk_config_file(target):
+        return False
     name = Path(target).name
     if name in _CONFIG_FILENAMES:
         return True
