@@ -14,6 +14,13 @@ from .simulator import simulate
 from .verifier import verify
 from .audit import get_audit_dir, log_event
 from .schemas import Verdict, RiskLevel, ParsedCommand, CommandCategory
+from .hook_config import (
+    disable_svx_hook,
+    enable_svx_hook,
+    load_settings,
+    save_settings,
+    settings_path,
+)
 
 
 # ANSI colors
@@ -72,6 +79,10 @@ def main():
         help="vibe = only block catastrophic; strict = confirm risky ops"
     )
 
+    # svx enable/disable (manage local Claude Code hook settings)
+    sub.add_parser("enable", help="Enable the SVX Claude Code hook in this project")
+    sub.add_parser("disable", help="Disable the SVX Claude Code hook in this project")
+
     # svx serve (MCP server mode)
     sub.add_parser("serve", help="Run as MCP server (stdio transport)")
 
@@ -93,6 +104,10 @@ def main():
         _cmd_hook()
     elif args.subcommand == "init":
         _cmd_init(args)
+    elif args.subcommand == "enable":
+        _cmd_enable()
+    elif args.subcommand == "disable":
+        _cmd_disable()
     elif args.subcommand == "audit":
         _cmd_audit(args)
     elif args.subcommand == "serve":
@@ -132,6 +147,51 @@ def _cmd_init(args):
         print(f"  {DIM}Only catastrophic operations will be blocked.{RESET}")
     else:
         print(f"  {DIM}Risky operations will require confirmation.{RESET}")
+
+
+def _cmd_enable():
+    """Enable SVX as a local Claude Code PreToolUse hook."""
+    path = settings_path(Path.cwd())
+    try:
+        settings = load_settings(path)
+        updated, added = enable_svx_hook(settings)
+        backup_path = save_settings(path, updated)
+    except ValueError as exc:
+        print(f"{RED}svx enable failed:{RESET} {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"{GREEN}svx hook enabled{RESET} in {path}")
+    if added:
+        print(f"  Added PreToolUse hooks for: {', '.join(added)}")
+    else:
+        print("  SVX hooks were already present.")
+    if backup_path:
+        print(f"  Backup: {backup_path}")
+    print(f"  {DIM}Verify in Claude Code with /hooks.{RESET}")
+
+
+def _cmd_disable():
+    """Disable SVX local Claude Code PreToolUse hooks."""
+    path = settings_path(Path.cwd())
+    if not path.exists():
+        print(f"{YELLOW}svx hook already disabled{RESET} ({path} does not exist)")
+        return
+
+    try:
+        settings = load_settings(path)
+        updated, removed = disable_svx_hook(settings)
+        backup_path = save_settings(path, updated)
+    except ValueError as exc:
+        print(f"{RED}svx disable failed:{RESET} {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    if removed:
+        print(f"{GREEN}svx hook disabled{RESET} in {path}")
+        print(f"  Removed {removed} hook handler(s).")
+    else:
+        print(f"{YELLOW}svx hook was not present{RESET} in {path}")
+    if backup_path:
+        print(f"  Backup: {backup_path}")
 
 
 def _cmd_check(args):

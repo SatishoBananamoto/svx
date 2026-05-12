@@ -74,6 +74,24 @@ svx can run as a pre-tool hook for Claude Code, automatically intercepting every
 svx hook  # reads tool input from stdin
 ```
 
+For a project-local Claude Code setup, run:
+
+```bash
+svx init
+svx enable
+```
+
+`svx enable` writes `.claude/settings.local.json` with local `PreToolUse` hooks
+for `Bash`, `Edit`, and `Write`, preserving any existing hooks and creating a
+timestamped backup when the file already exists. Use `/hooks` inside Claude Code
+to inspect the active configuration.
+
+To remove only the SVX hook entries later:
+
+```bash
+svx disable
+```
+
 ### View audit log
 
 ```bash

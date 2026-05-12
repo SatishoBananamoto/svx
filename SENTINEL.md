@@ -4,14 +4,27 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-11 — audit path and version baseline fixed
-**Repo**: Ready to commit. 66 tests passing.
+**Last session**: 2026-05-12 — Claude Code hook enable/disable helper added
+**Repo**: Ready to commit. 72 tests passing.
 
 ---
 
 ## NEXT SESSION — START HERE
 
-### What just happened (2026-05-11)
+### What just happened (2026-05-12)
+
+Codex added the first hook-wiring usability slice: `svx enable` and
+`svx disable` now manage project-local Claude Code `PreToolUse` hooks in
+`.claude/settings.local.json`. The helper preserves existing hooks, avoids
+duplicating SVX handlers, removes only SVX handlers on disable, and creates a
+timestamped backup before overwriting an existing settings file. README now
+documents the `svx init` -> `svx enable` setup path and `/hooks` verification.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 72
+tests, `python3 -B -m compileall src tests` passed, and `git diff --check`
+passed.
+
+Previous session (2026-05-11):
 
 Codex verified that the old tracker claim was stale: the suite initially failed because MCP server assessment tools wrote audit logs to `~/.svx-audit`, which is not writable in this sandbox. Fixed audit logging to honor `SVX_AUDIT_DIR` and fall back to `/tmp/svx-audit` if the preferred audit path is unavailable. Also synced `svx.__version__` to package version `0.3.0` and added a metadata regression test.
 
@@ -39,8 +52,8 @@ svx is meant to be a PreToolUse hook for Claude Code. The hook binary exists (`s
 
 _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up._
 
-- [ ] Document hook setup in README (settings.local.json config)
-- [ ] Add `svx enable` / `svx disable` commands for quick toggle
+- [x] Document hook setup in README (settings.local.json config)
+- [x] Add `svx enable` / `svx disable` commands for quick toggle
 - [ ] Test hook end-to-end with advisory deny format
 - [ ] Validate: agent receives hookSpecificOutput correctly
 - [ ] Continue
@@ -81,6 +94,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Ship to PyPI v0.3.0 — `commit:8f2f6fc`
 - [x] CI — `commit:dc4f99a`
 - [x] Audit path + version baseline — 2026-05-11 · 66 tests passing
+- [x] Hook enable/disable helper — 2026-05-12 · 72 tests passing
 
 </details>
 
@@ -122,6 +136,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** MCP server audit-path test failures and version metadata drift.
 - **Completed:** `SVX_AUDIT_DIR` support, `/tmp/svx-audit` fallback, server/CLI shared audit path, isolated server tests, version metadata regression.
 - **State:** 66 tests passing. Next: hook wiring and Bash file-write boundary.
+
+### 2026-05-12 — Codex hook wiring pass
+
+- **Worked on:** Project-local Claude Code hook setup
+- **Completed:** `svx enable` / `svx disable`, settings merge/remove helpers, README setup docs, and backup/idempotence tests.
+- **State:** 72 tests passing. Next: end-to-end hookSpecificOutput validation and Bash file-write boundary.
 
 ---
 
