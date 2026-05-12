@@ -4,14 +4,25 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — Claude Code hook enable/disable helper added
-**Repo**: Ready to commit. 72 tests passing.
+**Last session**: 2026-05-12 — hookSpecificOutput validation added
+**Repo**: Ready to commit. 76 tests passing.
 
 ---
 
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex added hook output validation for Claude Code integration. The tests now
+cover empty JSON for allowed hooks, advisory-deny `hookSpecificOutput` with an
+actionable instruction, hard-block output, and a strict-mode `_cmd_hook()` run
+from stdin to stdout in a temporary `.svx` project.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 76
+tests, `python3 -B -m compileall src tests` passed, and `git diff --check`
+passed.
+
+Previous session (2026-05-12):
 
 Codex added the first hook-wiring usability slice: `svx enable` and
 `svx disable` now manage project-local Claude Code `PreToolUse` hooks in
@@ -54,8 +65,8 @@ _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up
 
 - [x] Document hook setup in README (settings.local.json config)
 - [x] Add `svx enable` / `svx disable` commands for quick toggle
-- [ ] Test hook end-to-end with advisory deny format
-- [ ] Validate: agent receives hookSpecificOutput correctly
+- [x] Test hook end-to-end with advisory deny format
+- [x] Validate: agent receives hookSpecificOutput correctly
 - [ ] Continue
 
 ### Remaining from SVX-REWORK.md
@@ -95,6 +106,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] CI — `commit:dc4f99a`
 - [x] Audit path + version baseline — 2026-05-11 · 66 tests passing
 - [x] Hook enable/disable helper — 2026-05-12 · 72 tests passing
+- [x] hookSpecificOutput validation — 2026-05-12 · 76 tests passing
 
 </details>
 
@@ -142,6 +154,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** Project-local Claude Code hook setup
 - **Completed:** `svx enable` / `svx disable`, settings merge/remove helpers, README setup docs, and backup/idempotence tests.
 - **State:** 72 tests passing. Next: end-to-end hookSpecificOutput validation and Bash file-write boundary.
+
+### 2026-05-12 — Codex hook output validation pass
+
+- **Worked on:** Claude Code hookSpecificOutput contract coverage
+- **Completed:** Empty allow output, advisory-deny action output, hard-block output, and strict-mode `_cmd_hook()` stdin/stdout regression tests.
+- **State:** 76 tests passing. Next: Bash file-write boundary.
 
 ---
 
