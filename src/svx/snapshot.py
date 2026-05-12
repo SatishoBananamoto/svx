@@ -152,6 +152,7 @@ _CONFIG_PATH_PATTERNS = {
     ".github/workflows", ".github/actions",
     ".circleci", ".gitlab-ci",
     ".vscode/settings", ".idea/",
+    ".claude/settings",
 }
 
 

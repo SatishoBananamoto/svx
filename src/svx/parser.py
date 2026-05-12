@@ -27,6 +27,8 @@ NETWORK_PROGRAMS = {"curl", "wget"}
 
 # Flags that escalate risk
 FORCE_FLAGS = {"--force", "-f", "--no-verify", "-D", "--delete"}
+WRITE_REDIRECT_OPERATORS = {">", ">>", ">|", "&>"}
+CONTROL_TOKENS = {"|", "&&", "||", ";"}
 
 
 def parse_command(raw: str) -> list[ParsedCommand]:
@@ -35,7 +37,23 @@ def parse_command(raw: str) -> list[ParsedCommand]:
     Handles chained commands (&&, ||, ;) by splitting and parsing each.
     """
     segments = _split_chains(raw)
-    return [_parse_single(seg) for seg in segments if seg.strip()]
+    commands = []
+    for segment in segments:
+        if not segment.strip():
+            continue
+        base = _parse_single(segment)
+        bash_write = _parse_bash_file_write(segment)
+
+        if bash_write and base.category in (
+            CommandCategory.UNKNOWN,
+            CommandCategory.SHELL,
+        ):
+            commands.append(bash_write)
+        else:
+            commands.append(base)
+            if bash_write:
+                commands.append(bash_write)
+    return commands
 
 
 def _split_chains(raw: str) -> list[str]:
@@ -147,6 +165,154 @@ def _parse_single(raw: str) -> ParsedCommand:
         cmd.category = CommandCategory.UNKNOWN
 
     return cmd
+
+
+def _parse_bash_file_write(raw: str) -> ParsedCommand | None:
+    """Detect shell-level file writes and route them through FILE_WRITE.
+
+    Claude can write files through Bash without using the Write tool, for
+    example: cat > file, echo > file, heredoc redirects, or tee file. Those
+    patterns need the same verifier path as Write tool calls.
+    """
+    tokens = _shell_tokens(raw)
+    if not tokens:
+        return None
+
+    command_tokens = tokens[1:] if tokens[0] == "sudo" else tokens
+    if not command_tokens:
+        return None
+
+    redirect_targets = _redirect_targets(command_tokens)
+    tee_targets = _tee_targets(command_tokens)
+    targets = _dedupe([*redirect_targets, *tee_targets])
+    if not targets:
+        return None
+
+    flags = [
+        token
+        for token in command_tokens[1:]
+        if token.startswith("-") and token not in CONTROL_TOKENS
+    ]
+    args = [
+        token
+        for token in command_tokens[1:]
+        if token not in CONTROL_TOKENS and not token.startswith("-")
+    ]
+
+    return ParsedCommand(
+        raw=raw,
+        program=command_tokens[0],
+        args=args,
+        flags=flags,
+        category=CommandCategory.FILE_WRITE,
+        targets=targets,
+        metadata={
+            "source": "bash_file_write",
+            "content_length": 0,
+            "append": _uses_append_redirect(command_tokens),
+        },
+    )
+
+
+def _shell_tokens(raw: str) -> list[str]:
+    """Tokenize shell syntax while preserving redirection operators."""
+    try:
+        lexer = shlex.shlex(raw, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        return list(lexer)
+    except ValueError:
+        return []
+
+
+def _redirect_targets(tokens: list[str]) -> list[str]:
+    targets = []
+    for index, token in enumerate(tokens[:-1]):
+        if token not in WRITE_REDIRECT_OPERATORS:
+            continue
+        target = tokens[index + 1]
+        if _looks_like_file_target(target):
+            targets.append(target)
+    return targets
+
+
+def _tee_targets(tokens: list[str]) -> list[str]:
+    targets = []
+    index = 0
+    while index < len(tokens):
+        segment = []
+        while index < len(tokens) and tokens[index] != "|":
+            segment.append(tokens[index])
+            index += 1
+
+        if segment and segment[0] == "tee":
+            targets.extend(_tee_segment_targets(segment))
+
+        index += 1
+    return targets
+
+
+def _tee_segment_targets(segment: list[str]) -> list[str]:
+    targets = []
+    end_of_options = False
+    for token in segment[1:]:
+        if token == "--":
+            end_of_options = True
+            continue
+        if not end_of_options and token.startswith("-"):
+            continue
+        if token in WRITE_REDIRECT_OPERATORS or token in CONTROL_TOKENS:
+            continue
+        if _looks_like_file_target(token):
+            targets.append(token)
+    return targets
+
+
+def _looks_like_file_target(token: str) -> bool:
+    if not token:
+        return False
+    if token in CONTROL_TOKENS:
+        return False
+    if token in WRITE_REDIRECT_OPERATORS or token in {"<", "<<", "<<<"}:
+        return False
+    if token.startswith("&"):
+        return False
+    return True
+
+
+def _uses_append_redirect(tokens: list[str]) -> bool:
+    if ">>" in tokens:
+        return True
+    for segment in _pipe_segments(tokens):
+        if segment and segment[0] == "tee" and any(
+            token in ("-a", "--append") for token in segment[1:]
+        ):
+            return True
+    return False
+
+
+def _pipe_segments(tokens: list[str]) -> list[list[str]]:
+    segments = []
+    current = []
+    for token in tokens:
+        if token == "|":
+            if current:
+                segments.append(current)
+            current = []
+        else:
+            current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen = set()
+    result = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            result.append(value)
+    return result
 
 
 def has_force_flags(cmd: ParsedCommand) -> bool:

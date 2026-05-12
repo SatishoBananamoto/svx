@@ -191,6 +191,21 @@ def _check_blocks(
             if target in ("/", "/*", "~", "~/*"):
                 reasons.append(f"BLOCKED: Deleting '{target}' is catastrophic")
 
+    if block_rules.get("protect_claude_settings", True):
+        if cmd.category in (
+            CommandCategory.FILE_DELETE,
+            CommandCategory.FILE_EDIT,
+            CommandCategory.FILE_MOVE,
+            CommandCategory.FILE_PERMISSION,
+            CommandCategory.FILE_WRITE,
+        ):
+            for target in cmd.targets:
+                if _is_claude_settings_path(target):
+                    reasons.append(
+                        "BLOCKED: Modifying Claude Code settings can disable SVX"
+                    )
+                    break
+
     return bool(reasons), reasons
 
 
@@ -387,6 +402,14 @@ def _build_advisory_action(
         return "Commit or stash your current changes first with 'git stash', then retry."
 
     return None
+
+
+def _is_claude_settings_path(target: str) -> bool:
+    parts = Path(target).parts
+    for index, part in enumerate(parts[:-1]):
+        if part == ".claude" and parts[index + 1].startswith("settings"):
+            return True
+    return False
 
 
 def _load_policies(path: Path) -> dict:

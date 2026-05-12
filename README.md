@@ -86,6 +86,11 @@ for `Bash`, `Edit`, and `Write`, preserving any existing hooks and creating a
 timestamped backup when the file already exists. Use `/hooks` inside Claude Code
 to inspect the active configuration.
 
+Bash file writes through stdout redirects, heredocs, and `tee` are routed
+through the same file-write verifier as the `Write` tool. Direct modification
+of `.claude/settings*` is hard-blocked so an agent cannot remove the SVX hook by
+overwriting Claude Code's local settings.
+
 To remove only the SVX hook entries later:
 
 ```bash
@@ -112,6 +117,8 @@ the home audit directory is not writable.
 | `git branch -D feature` | CONFIRM | Force-deletes branch, may lose unmerged work |
 | `rm -rf build/` | CONFIRM | Recursive delete, untracked files unrecoverable |
 | `kill -9 1234` | CONFIRM | Force-kills process, unsaved state lost |
+| `echo "new" > data/output.csv` | CONFIRM | Bash redirect overwrites an untracked file |
+| `cat > .claude/settings.local.json` | BLOCK | Would modify Claude Code hook settings |
 | `git push origin feature` | ALLOW | Normal push, reversible |
 | `git status` | ALLOW | Read-only |
 | `npm install lodash` | ALLOW | Reversible package install |
@@ -122,7 +129,7 @@ the home audit directory is not writable.
 Command → Parse → Snapshot world state → Simulate outcome → Verify safety → Verdict
 ```
 
-1. **Parse**: Break the command into program, subcommand, flags, targets
+1. **Parse**: Break the command into program, subcommand, flags, targets, including Bash redirects and `tee` writes
 2. **Snapshot**: Capture current git state, file existence, sizes, tracking status
 3. **Simulate**: Predict effects using dry-run flags and heuristic analysis (no LLM calls)
 4. **Verify**: Score risk based on reversibility, blast radius, data loss, and policies
@@ -137,6 +144,7 @@ Safety rules are defined in `policies/default.yaml`:
 blocks:
   force_push_to_main: true
   delete_root: true
+  protect_claude_settings: true
 
 confirmations:
   irreversible_actions: true
@@ -159,6 +167,14 @@ svx init --mode vibe        # only block catastrophic (default)
 ```
 
 Operations outside `.svx/` projects are auto-allowed.
+
+## Safety Boundary
+
+SVX is a safety rail, not OS-level containment. It is designed to catch,
+explain, log, confirm, or block risky pre-tool actions before normal agent
+mistakes touch a project. A deliberately adversarial process with unrestricted
+shell access is outside this trust boundary; use operating-system sandboxing
+when containment is required.
 
 ### Modes
 

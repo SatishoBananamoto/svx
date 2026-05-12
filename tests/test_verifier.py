@@ -2,6 +2,7 @@
 
 from svx.parser import parse_command
 from svx.schemas import (
+    CommandCategory,
     WorldSnapshot,
     Verdict,
     RiskLevel,
@@ -66,6 +67,40 @@ def test_rm_untracked_file_confirms():
     result = verify(cmd, snap, sim)
     assert sim.data_loss_possible
     assert result.verdict == Verdict.CONFIRM
+
+
+def test_bash_write_overwrite_untracked_file_confirms():
+    cmd = parse_command("echo 'new' > data/output.csv")[0]
+    snap = _make_snap(
+        target_exists={"data/output.csv": True},
+        target_sizes={"data/output.csv": 2048},
+        target_git_tracked={"data/output.csv": False},
+    )
+    sim = simulate(cmd, snap)
+    result = verify(cmd, snap, sim)
+
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert sim.data_loss_possible
+    assert result.verdict == Verdict.CONFIRM
+    assert any("untracked" in r.lower() for r in result.reasons)
+
+
+def test_bash_write_to_claude_settings_is_blocked():
+    target = ".claude/settings.local.json"
+    cmd = parse_command(f"cat > {target} <<'EOF'\n{{}}\nEOF")[0]
+    snap = _make_snap(
+        target_exists={target: True},
+        target_sizes={target: 128},
+        target_git_tracked={target: False},
+        target_is_config={target: True},
+    )
+    sim = simulate(cmd, snap)
+    result = verify(cmd, snap, sim)
+
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert result.verdict == Verdict.BLOCK
+    assert result.deny_kind is not None
+    assert any("Claude Code settings" in r for r in result.reasons)
 
 
 def test_rm_tracked_file_allows():

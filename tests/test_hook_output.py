@@ -112,3 +112,77 @@ def test_cmd_hook_strict_write_advisory_outputs_hook_specific_json(
     assert hook_output["hookEventName"] == "PreToolUse"
     assert hook_output["permissionDecision"] == "deny"
     assert "Action needed:" in hook_output["permissionDecisionReason"]
+
+
+def test_cmd_hook_strict_bash_redirection_outputs_hook_specific_json(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    (tmp_path / ".svx").mkdir()
+    target = tmp_path / "notes.txt"
+    target.write_text("old content\n")
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".svx.yaml").write_text("mode: strict\n")
+
+    hook_input = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": f"cat > {target} <<'EOF'\nnew content\nEOF",
+        },
+        "hook_event_name": "PreToolUse",
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
+
+    with pytest.raises(SystemExit) as exc:
+        _cmd_hook()
+
+    assert exc.value.code == 0
+    data = json.loads(capsys.readouterr().out)
+    hook_output = data["hookSpecificOutput"]
+    assert hook_output["hookEventName"] == "PreToolUse"
+    assert hook_output["permissionDecision"] == "deny"
+    assert "Action needed:" in hook_output["permissionDecisionReason"]
+
+
+def test_cmd_hook_blocks_bash_write_to_claude_settings(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    (tmp_path / ".svx").mkdir()
+    settings_dir = tmp_path / ".claude"
+    settings_dir.mkdir()
+    target = settings_dir / "settings.local.json"
+    target.write_text("{}\n")
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".svx.yaml").write_text("mode: vibe\n")
+
+    hook_input = {
+        "tool_name": "Bash",
+        "tool_input": {
+            "command": f"cat > {target} <<'EOF'\n{{}}\nEOF",
+        },
+        "hook_event_name": "PreToolUse",
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
+
+    with pytest.raises(SystemExit) as exc:
+        _cmd_hook()
+
+    assert exc.value.code == 0
+    data = json.loads(capsys.readouterr().out)
+    hook_output = data["hookSpecificOutput"]
+    assert hook_output["permissionDecision"] == "deny"
+    assert "[svx BLOCKED]" in hook_output["permissionDecisionReason"]
+    assert "Claude Code settings" in hook_output["permissionDecisionReason"]

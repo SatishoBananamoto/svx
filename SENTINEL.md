@@ -4,14 +4,25 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — hookSpecificOutput validation added
-**Repo**: Ready to commit. 76 tests passing.
+**Last session**: 2026-05-12 — Bash file-write boundary added
+**Repo**: Ready to commit. 86 tests passing.
 
 ---
 
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex closed the first Bash file-write bypass slice. Bash stdout redirects
+(`>`, `>>`), heredoc-with-redirect commands, and `tee` targets now parse as
+`FILE_WRITE` and reuse the existing file-write snapshot/simulation/verification
+path. Writes to `.claude/settings*` are hard-blocked so SVX cannot be disabled
+through a Bash overwrite of Claude Code hook settings.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 86
+tests.
+
+Previous session (2026-05-12):
 
 Codex added hook output validation for Claude Code integration. The tests now
 cover empty JSON for allowed hooks, advisory-deny `hookSpecificOutput` with an
@@ -51,7 +62,7 @@ svx is meant to be a PreToolUse hook for Claude Code. The hook binary exists (`s
 
 ### What NOT to do
 
-- Don't chase the old flaky-test note without reproducing it — current local suite is 66 passing
+- Don't chase the old flaky-test note without reproducing it — current local suite is 86 passing
 - Don't add new policies before the existing ones are validated in real use
 - Don't make the hook mandatory — opt-in per project via `svx init`
 
@@ -74,7 +85,7 @@ _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up
 _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) are solved._
 
 - [ ] Session context for read-before-write — track reads in `.svx/session.json`
-- [ ] Consistent Bash boundary — detect file-writing patterns (cat >, heredoc, tee)
+- [x] Consistent Bash boundary — detect file-writing patterns (cat >, heredoc, tee)
 - [ ] Easy pause/resume — `svx pause` / `svx resume` + env var `SVX_DISABLED=1`
 - [ ] Config file risk calibration — `.gitignore` ≠ `settings.json`
 - [ ] Continue
@@ -107,6 +118,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Audit path + version baseline — 2026-05-11 · 66 tests passing
 - [x] Hook enable/disable helper — 2026-05-12 · 72 tests passing
 - [x] hookSpecificOutput validation — 2026-05-12 · 76 tests passing
+- [x] Bash file-write boundary — 2026-05-12 · redirects, heredoc, tee, `.claude/settings*` hard block, 86 tests passing
 
 </details>
 
@@ -160,6 +172,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** Claude Code hookSpecificOutput contract coverage
 - **Completed:** Empty allow output, advisory-deny action output, hard-block output, and strict-mode `_cmd_hook()` stdin/stdout regression tests.
 - **State:** 76 tests passing. Next: Bash file-write boundary.
+
+### 2026-05-12 — Codex Bash file-write boundary pass
+
+- **Worked on:** Bash-level file writes that bypassed the Write tool simulator.
+- **Completed:** Redirect/heredoc/tee detection, reuse of `FILE_WRITE` verification, `.claude/settings*` hard-block policy, README/review/tracker updates, and hook regressions for strict advisory deny plus vibe-mode settings block.
+- **State:** 86 tests passing. Next: session context/read-before-write or pause/resume.
 
 ---
 

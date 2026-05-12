@@ -57,6 +57,54 @@ def test_pipe_analyzes_last():
     assert cmd.program == "grep"
 
 
+def test_redirect_write_is_file_write():
+    cmds = parse_command("echo 'new content' > notes.txt")
+    cmd = cmds[0]
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert cmd.targets == ["notes.txt"]
+    assert cmd.metadata["source"] == "bash_file_write"
+
+
+def test_append_redirect_is_file_write():
+    cmds = parse_command("cat >> notes.txt")
+    cmd = cmds[0]
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert cmd.targets == ["notes.txt"]
+    assert cmd.metadata["append"] is True
+
+
+def test_heredoc_redirect_is_file_write():
+    raw = "cat > notes.txt <<'EOF'\nnew content\nEOF"
+    cmds = parse_command(raw)
+    cmd = cmds[0]
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert cmd.targets == ["notes.txt"]
+
+
+def test_tee_pipe_is_file_write():
+    cmds = parse_command("printf 'new content' | tee -a notes.txt")
+    cmd = cmds[0]
+    assert cmd.category == CommandCategory.FILE_WRITE
+    assert cmd.targets == ["notes.txt"]
+    assert cmd.metadata["append"] is True
+
+
+def test_redirect_does_not_hide_dangerous_command():
+    cmds = parse_command("git push --force origin main > push.log")
+    assert len(cmds) == 2
+    assert cmds[0].category == CommandCategory.GIT
+    assert cmds[0].subcommand == "push"
+    assert "--force" in cmds[0].flags
+    assert cmds[1].category == CommandCategory.FILE_WRITE
+    assert cmds[1].targets == ["push.log"]
+
+
+def test_plain_cat_is_not_file_write():
+    cmds = parse_command("cat notes.txt")
+    cmd = cmds[0]
+    assert cmd.category == CommandCategory.UNKNOWN
+
+
 def test_npm_install():
     cmds = parse_command("npm install lodash")
     cmd = cmds[0]

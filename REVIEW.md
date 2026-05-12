@@ -7,6 +7,23 @@
 
 ---
 
+## 2026-05-12 Codex Update
+
+The common Bash file-write bypass now has initial coverage. `parser.py` routes
+stdout redirects (`>`, `>>`, heredoc-with-redirect) and `tee` targets into the
+same `FILE_WRITE` simulation path used by the Claude Code `Write` tool.
+`verifier.py` also hard-blocks destructive touches to `.claude/settings*`, so
+the documented `cat > .claude/settings.local.json` self-disable path is denied
+even in vibe mode.
+
+Current local verification: `python3 -B -m pytest -q -p no:cacheprovider`
+passes with 86 tests. The original B- review is now partially stale: the Bash
+self-disablement finding is addressed for common file-write patterns, but
+session context, pause/resume, false-positive calibration, and broader
+containment/threat-model hardening remain open.
+
+---
+
 ## 2026-05-11 Codex Update
 
 The version mismatch noted below is fixed: `svx.__version__` now matches `pyproject.toml` at `0.3.0`. MCP server assessment tests also no longer depend on writing to `~/.svx-audit`; audit logging honors `SVX_AUDIT_DIR` and falls back to `/tmp/svx-audit` if the preferred path is unavailable.

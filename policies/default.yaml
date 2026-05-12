@@ -4,6 +4,7 @@ blocks:
   # Hard blocks — these commands are never allowed
   force_push_to_main: true
   delete_root: true
+  protect_claude_settings: true
 
 confirmations:
   # These require explicit user confirmation
