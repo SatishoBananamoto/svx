@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from .parser import extract_bash_file_reads, parse_command
-from .session import record_file_read
+from .session import SESSION_TTL_SECONDS, prune_stale_reads, record_file_read
 from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
@@ -97,6 +97,18 @@ def main():
     # svx serve (MCP server mode)
     sub.add_parser("serve", help="Run as MCP server (stdio transport)")
 
+    # svx session prune (clean stale read-tracking cache)
+    session_prune_parser = sub.add_parser(
+        "session-prune",
+        help="Prune stale read-tracking entries in .svx/session.json",
+    )
+    session_prune_parser.add_argument(
+        "--max-age-hours",
+        type=float,
+        default=12.0,
+        help="Age threshold for kept reads (hours)",
+    )
+
     # svx watch (live dashboard)
     watch_parser = sub.add_parser("watch", help="Live dashboard — tail audit log")
     watch_parser.add_argument(
@@ -127,6 +139,8 @@ def main():
         _cmd_audit(args)
     elif args.subcommand == "serve":
         _cmd_serve()
+    elif args.subcommand == "session-prune":
+        _cmd_session_prune(args)
     elif args.subcommand == "watch":
         _cmd_watch(args)
     else:
@@ -239,6 +253,24 @@ def _set_project_paused(paused: bool):
     else:
         print(f"{GREEN}svx resumed{RESET} for {root}")
         print(f"  Config: {path}")
+
+
+def _cmd_session_prune(args):
+    """Prune stale read-tracking entries for the current project."""
+    root = _find_svx_root(Path.cwd())
+    if root is None:
+        print(
+            f"{RED}svx session-prune failed:{RESET} run 'svx init' first",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    max_age_sec = max(1, int(args.max_age_hours * 3600))
+    removed = prune_stale_reads(root, max_age_sec=max_age_sec)
+    if removed == 0:
+        print(f"{GREEN}svx session cache is clean.{RESET}")
+    else:
+        print(f"{GREEN}svx session-prune:{RESET} removed {removed} stale read record(s).")
 
 
 def _cmd_check(args):
@@ -354,6 +386,9 @@ def _cmd_hook():
     if not roots:
         print(json.dumps({}))
         sys.exit(0)
+
+    for root in roots:
+        prune_stale_reads(root, max_age_sec=SESSION_TTL_SECONDS)
 
     from .schemas import DenyKind
 

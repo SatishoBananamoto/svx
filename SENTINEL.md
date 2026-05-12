@@ -4,7 +4,7 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — read-before-write session context enforcement
+**Last session**: 2026-05-12 — session cache cleanup maintenance
 **Repo**: Ready to commit.
 
 ---
@@ -12,6 +12,16 @@
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex extended session handling with explicit maintenance for stale read-tracking data.
+`svx session-prune` now removes aged read records on demand and the hook path now
+prunes stale reads automatically before policy evaluation for each discovered
+project root. This keeps `read-before-write` enforcement precise while preventing
+an unbounded `.svx/session.json` growth.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 105 tests.
+
+Previous session (2026-05-12):
 
 Codex implemented session context tracking for read-before-write enforcement on
 config files. Bash read commands now record file reads into `.svx/session.json`
@@ -153,6 +163,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Pause/resume — 2026-05-12 · project-local paused flag, `SVX_DISABLED=1`, project config honored by hook, 92 tests passing
 - [x] Config file risk calibration — 2026-05-12 — `.gitignore` no longer treated as config by default, 93 tests passing
 - [x] Read-before-write context — 2026-05-12 — session tracking for read commands with config-file edit confirmation, 101 tests passing
+- [x] Session cache maintenance — 2026-05-12 — added `svx session-prune` + hook auto-prune, 105 tests passing
 
 </details>
 
@@ -212,6 +223,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** Bash-level file writes that bypassed the Write tool simulator.
 - **Completed:** Redirect/heredoc/tee detection, reuse of `FILE_WRITE` verification, `.claude/settings*` hard-block policy, README/review/tracker updates, and hook regressions for strict advisory deny plus vibe-mode settings block.
 - **State:** 86 tests passing. Next: session context/read-before-write or pause/resume.
+
+### 2026-05-12 — Codex session cache maintenance pass
+
+- **Worked on:** Stale session-tracking record cleanup.
+- **Completed:** Added `svx session-prune`, automatic stale-read pruning in hook flow, and regression coverage for cleanup command + session helpers.
+- **State:** 105 tests passing.
 
 ### 2026-05-12 — Codex pause/resume pass
 

@@ -1,6 +1,8 @@
 """Tests for svx init, project scoping, and hook pause/resume."""
 
 import sys
+import json
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -13,6 +15,7 @@ from svx.config import (
     load_project_config,
 )
 from svx.schemas import ParsedCommand, CommandCategory
+from svx.session import get_session_path, record_file_read
 
 
 class TestSvxInit:
@@ -150,3 +153,37 @@ class TestConfig:
 
         assert exc.value.code == 1
         assert not (tmp_path / ".svx").exists()
+
+    def test_session_prune_cli_removes_stale_entries(self, tmp_path, monkeypatch, capsys):
+        """session-prune should remove stale .svx session entries."""
+        (tmp_path / ".svx").mkdir()
+        target = tmp_path / "settings.env"
+        target.write_text("OLD=1\n")
+        record_file_read(target, cwd=tmp_path)
+
+        session_path = get_session_path(tmp_path)
+        assert session_path is not None
+        data = json.loads(session_path.read_text())
+        old = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat()
+        data["reads"][str(target)]["seen_at"] = old
+        session_path.write_text(json.dumps(data))
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["svx", "session-prune", "--max-age-hours", "1"])
+        main()
+
+        output = capsys.readouterr().out
+        assert "removed 1 stale read record(s)." in output
+
+        data_after = json.loads(session_path.read_text())
+        assert str(target) not in data_after.get("reads", {})
+
+    def test_session_prune_fails_without_project(self, tmp_path, monkeypatch):
+        """session-prune should require an initialized project."""
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(sys, "argv", ["svx", "session-prune"])
+
+        with pytest.raises(SystemExit) as exc:
+            main()
+
+        assert exc.value.code == 1

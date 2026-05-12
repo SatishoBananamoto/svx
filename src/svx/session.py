@@ -52,7 +52,7 @@ def record_file_read(target: str, cwd: str | Path | None = None) -> None:
         seen_at=now,
         mtime=path.stat().st_mtime,
     ).to_dict()
-    _prune_expired_reads(reads)
+    _prune_expired_reads(reads, max_age_sec=SESSION_TTL_SECONDS)
 
     _write_session(session_file, {"version": 1, "reads": reads})
 
@@ -98,6 +98,30 @@ def has_file_been_read(
     return True
 
 
+def prune_stale_reads(
+    cwd: str | Path | None = None,
+    max_age_sec: int = SESSION_TTL_SECONDS,
+) -> int:
+    """Prune stale read records for a project and return number removed."""
+    session_file = get_session_path(cwd)
+    if session_file is None or not session_file.exists():
+        return 0
+
+    data = _load_session(session_file)
+    reads = data.get("reads")
+    if not isinstance(reads, dict):
+        reads = {}
+        data["reads"] = reads
+
+    before = len(reads)
+    _prune_expired_reads(reads, max_age_sec=max_age_sec)
+    if len(reads) == before:
+        return 0
+
+    _write_session(session_file, {"version": data.get("version", 1), "reads": reads})
+    return before - len(reads)
+
+
 def _resolve_path(target: str, cwd: str | Path | None) -> Path:
     p = Path(target)
     if not p.is_absolute():
@@ -129,7 +153,10 @@ def _write_session(path: Path, data: dict[str, Any]) -> None:
         return
 
 
-def _prune_expired_reads(reads: dict[str, dict[str, object]]) -> None:
+def _prune_expired_reads(
+    reads: dict[str, dict[str, object]],
+    max_age_sec: int = SESSION_TTL_SECONDS,
+) -> None:
     """Mutate reads map, removing entries older than the session TTL."""
     now = datetime.now(timezone.utc).timestamp()
     expired = []
@@ -146,7 +173,7 @@ def _prune_expired_reads(reads: dict[str, dict[str, object]]) -> None:
         except ValueError:
             expired.append(key)
             continue
-        if now - seen_time > SESSION_TTL_SECONDS:
+        if now - seen_time > max_age_sec:
             expired.append(key)
     for key in expired:
         reads.pop(key, None)
