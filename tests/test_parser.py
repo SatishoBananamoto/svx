@@ -1,6 +1,6 @@
 """Tests for command parser."""
 
-from svx.parser import parse_command, has_force_flags
+from svx.parser import extract_bash_file_reads, parse_command, has_force_flags
 from svx.schemas import CommandCategory
 
 
@@ -103,6 +103,21 @@ def test_plain_cat_is_not_file_write():
     cmds = parse_command("cat notes.txt")
     cmd = cmds[0]
     assert cmd.category == CommandCategory.UNKNOWN
+
+
+def test_extract_bash_file_reads_from_cat():
+    reads = extract_bash_file_reads("cat notes.txt")
+    assert reads == ["notes.txt"]
+
+
+def test_extract_bash_file_reads_from_sed():
+    reads = extract_bash_file_reads("sed -n '1,20p' notes.txt")
+    assert reads == ["notes.txt"]
+
+
+def test_extract_bash_file_reads_from_pipe():
+    reads = extract_bash_file_reads("cat notes.txt | sed -n '1,5p'")
+    assert reads == ["notes.txt"]
 
 
 def test_npm_install():

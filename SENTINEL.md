@@ -4,7 +4,7 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — config file risk calibration update
+**Last session**: 2026-05-12 — read-before-write session context enforcement
 **Repo**: Ready to commit.
 
 ---
@@ -12,6 +12,16 @@
 ## NEXT SESSION — START HERE
 
 ### What just happened (2026-05-12)
+
+Codex implemented session context tracking for read-before-write enforcement on
+config files. Bash read commands now record file reads into `.svx/session.json`
+and write/edit verification now requires a fresh read in-session for existing
+config files before retrying. This closes the read-before-write bypass gap while
+keeping non-blocking session persistence behavior.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 101 tests.
+
+Previous session (2026-05-12):
 
 Codex resolved `.gitignore` from the high-risk config bucket. `snapshot.py` now
 excludes `.gitignore`, `.gitattributes`, and `.gitmodules` from `config_file_edits`
@@ -105,7 +115,7 @@ _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up
 
 _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) are solved._
 
-- [ ] Session context for read-before-write — track reads in `.svx/session.json`
+- [x] Session context for read-before-write — track reads in `.svx/session.json`
 - [x] Consistent Bash boundary — detect file-writing patterns (cat >, heredoc, tee)
 - [x] Easy pause/resume — `svx pause` / `svx resume` + env var `SVX_DISABLED=1`
 - [x] Config file risk calibration — `.gitignore` ≠ `settings.json`
@@ -142,6 +152,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Bash file-write boundary — 2026-05-12 · redirects, heredoc, tee, `.claude/settings*` hard block, 86 tests passing
 - [x] Pause/resume — 2026-05-12 · project-local paused flag, `SVX_DISABLED=1`, project config honored by hook, 92 tests passing
 - [x] Config file risk calibration — 2026-05-12 — `.gitignore` no longer treated as config by default, 93 tests passing
+- [x] Read-before-write context — 2026-05-12 — session tracking for read commands with config-file edit confirmation, 101 tests passing
 
 </details>
 

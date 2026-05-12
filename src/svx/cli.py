@@ -8,7 +8,8 @@ import sys
 import time
 from pathlib import Path
 
-from .parser import parse_command
+from .parser import extract_bash_file_reads, parse_command
+from .session import record_file_read
 from .snapshot import capture
 from .simulator import simulate
 from .verifier import verify
@@ -337,6 +338,8 @@ def _cmd_hook():
             print(json.dumps({}))
             sys.exit(0)
         commands = parse_command(command)
+        for read_target in extract_bash_file_reads(command):
+            record_file_read(read_target, cwd=Path.cwd())
     elif tool_name == "Edit":
         commands = [_parse_edit_tool(tool_input)]
     elif tool_name == "Write":

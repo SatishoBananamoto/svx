@@ -1,8 +1,10 @@
 """Tests for the verification pipeline."""
 
 from svx.parser import parse_command
+from svx.session import record_file_read
 from svx.schemas import (
     CommandCategory,
+    ParsedCommand,
     WorldSnapshot,
     Verdict,
     RiskLevel,
@@ -163,3 +165,34 @@ def test_kill_9_confirms():
     result = verify(cmd, snap, sim)
     assert result.verdict == Verdict.CONFIRM
     assert sim.data_loss_possible
+
+
+def test_config_file_write_requires_session_read_for_read_before_write(tmp_path):
+    (tmp_path / ".svx").mkdir()
+    target = tmp_path / ".env"
+    target.write_text("OLD=1\n")
+
+    cmd = ParsedCommand(
+        raw=f"Write {target}",
+        program="Write",
+        category=CommandCategory.FILE_WRITE,
+        targets=[str(target)],
+        metadata={"content_length": 10},
+    )
+    snap = WorldSnapshot(
+        cwd=str(tmp_path),
+        is_git_repo=False,
+        target_exists={str(target): True},
+        target_is_config={str(target): True},
+        target_sizes={str(target): 6},
+        target_git_tracked={str(target): True},
+    )
+    sim = simulate(cmd, snap)
+    blocked_by_read = verify(cmd, snap, sim)
+    assert blocked_by_read.verdict == Verdict.CONFIRM
+    assert any("Read '" in r and "then retry" in r for r in blocked_by_read.reasons)
+
+    record_file_read(target, cwd=tmp_path)
+    allowed_by_session = verify(cmd, snap, sim)
+    assert allowed_by_session.verdict == Verdict.CONFIRM
+    assert not any("Read '" in r and "then retry" in r for r in allowed_by_session.reasons)

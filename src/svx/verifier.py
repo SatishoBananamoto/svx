@@ -16,6 +16,7 @@ from .schemas import (
     Reversibility,
 )
 from .parser import has_force_flags
+from .session import has_file_been_read
 
 
 DEFAULT_POLICIES_PATH = Path(__file__).parent.parent.parent / "policies" / "default.yaml"
@@ -247,7 +248,20 @@ def _check_confirmations(
         if cmd.category in (CommandCategory.FILE_EDIT, CommandCategory.FILE_WRITE):
             for target in cmd.targets:
                 if snap.target_is_config.get(target, False):
-                    reasons.append(f"Editing config file '{target}' requires confirmation")
+                    reasons.append(
+                        f"Editing config file '{target}' requires confirmation"
+                    )
+
+            for target in cmd.targets:
+                if (
+                    snap.target_exists.get(target, False)
+                    and snap.target_is_config.get(target, False)
+                    and not has_file_been_read(target, cwd=snap.cwd)
+                ):
+                    reasons.append(
+                        f"Read '{target}' first to verify its current content, "
+                        "then retry this command."
+                    )
 
     # Large rewrites (>50% of file)
     if cmd.category == CommandCategory.FILE_EDIT and snap.edit_change_ratio > 0.5:
@@ -371,6 +385,14 @@ def _build_advisory_action(
     if cmd.category == CommandCategory.FILE_EDIT:
         target = cmd.targets[0] if cmd.targets else ""
 
+        if (
+            target
+            and snap.target_exists.get(target, False)
+            and snap.target_is_config.get(target, False)
+            and not has_file_been_read(target, cwd=snap.cwd)
+        ):
+            return f"Read '{target}' first to verify its current content, then retry."
+
         if snap.edit_old_string_found is False:
             return f"Re-read '{target}' first — the content you're trying to replace doesn't match the file."
 
@@ -383,6 +405,13 @@ def _build_advisory_action(
     # ── File writes ──
     if cmd.category == CommandCategory.FILE_WRITE:
         for target in cmd.targets:
+            if (
+                snap.target_exists.get(target, False)
+                and snap.target_is_config.get(target, False)
+                and not has_file_been_read(target, cwd=snap.cwd)
+            ):
+                return f"Read '{target}' first to verify its current content, then retry."
+
             if (
                 snap.target_exists.get(target, False)
                 and not snap.target_git_tracked.get(target, False)

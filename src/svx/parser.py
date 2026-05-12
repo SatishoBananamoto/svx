@@ -17,6 +17,21 @@ GIT_SAFE_SUBCMDS = {
     "fetch", "ls-files", "rev-parse", "describe", "shortlog",
 }
 
+# Programs that read and emit content to stdout/terminal.
+FILE_READ_PROGRAMS = {
+    "cat",
+    "head",
+    "less",
+    "more",
+    "nl",
+    "sed",
+    "tail",
+    "zcat",
+    "gzip",
+    "bzip2",
+    "xz",
+}
+
 # Programs that delete or overwrite
 FILE_DELETE_PROGRAMS = {"rm", "rmdir", "unlink", "shred"}
 FILE_MOVE_PROGRAMS = {"mv", "cp"}
@@ -54,6 +69,36 @@ def parse_command(raw: str) -> list[ParsedCommand]:
             if bash_write:
                 commands.append(bash_write)
     return commands
+
+
+def extract_bash_file_reads(raw: str) -> list[str]:
+    """Extract likely read targets from a bash command string."""
+    tokens = _shell_tokens(raw)
+    if not tokens:
+        return []
+
+    command_tokens = tokens[1:] if tokens[0] == "sudo" else tokens
+    if not command_tokens:
+        return []
+
+    targets: list[str] = []
+    for segment in _pipe_segments(command_tokens):
+        if not segment or segment[0] not in FILE_READ_PROGRAMS:
+            continue
+
+        for token in segment[1:]:
+            if token in CONTROL_TOKENS:
+                continue
+            if token in WRITE_REDIRECT_OPERATORS:
+                continue
+            if token in {">", ">>", "|", "<", "<<", "<<<"}:
+                continue
+            if token.startswith("-"):
+                continue
+            if _looks_like_file_target(token):
+                targets.append(token)
+
+    return _dedupe(targets)
 
 
 def _split_chains(raw: str) -> list[str]:
@@ -273,6 +318,10 @@ def _looks_like_file_target(token: str) -> bool:
     if token in CONTROL_TOKENS:
         return False
     if token in WRITE_REDIRECT_OPERATORS or token in {"<", "<<", "<<<"}:
+        return False
+    if "," in token:
+        # Sed and awk style expressions commonly include commas and should not
+        # be treated as file paths.
         return False
     if token.startswith("&"):
         return False

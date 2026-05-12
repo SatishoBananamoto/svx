@@ -150,6 +150,53 @@ def test_cmd_hook_strict_bash_redirection_outputs_hook_specific_json(
     assert "Action needed:" in hook_output["permissionDecisionReason"]
 
 
+def test_cmd_hook_read_before_write_for_config_drops_read_prompt(
+    tmp_path,
+    monkeypatch,
+    capsys,
+):
+    (tmp_path / ".svx").mkdir()
+    target = tmp_path / ".env"
+    target.write_text("OLD=1\n")
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".svx.yaml").write_text("mode: strict\n")
+
+    read_input = {
+        "tool_name": "Bash",
+        "tool_input": {"command": f"cat {target}"},
+        "hook_event_name": "PreToolUse",
+    }
+    write_input = {
+        "tool_name": "Write",
+        "tool_input": {"file_path": str(target), "content": "NEW=1\n"},
+        "hook_event_name": "PreToolUse",
+    }
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(home))
+
+    def run_hook_event(hook_payload):
+        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_payload)))
+        with pytest.raises(SystemExit):
+            _cmd_hook()
+        return json.loads(capsys.readouterr().out)
+
+    first_output = run_hook_event(write_input)
+    assert first_output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "Read '" in first_output["hookSpecificOutput"]["permissionDecisionReason"]
+
+    # Read once in the same session.
+    read_output = run_hook_event(read_input)
+    assert read_output == {}
+
+    second_output = run_hook_event(write_input)
+    assert second_output["hookSpecificOutput"]["permissionDecision"] == "deny"
+    assert "Read '" not in second_output["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "Action needed:" in second_output["hookSpecificOutput"]["permissionDecisionReason"]
+
+
 def test_cmd_hook_blocks_bash_write_to_claude_settings(
     tmp_path,
     monkeypatch,
