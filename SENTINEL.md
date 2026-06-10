@@ -121,6 +121,19 @@ _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up
 - [x] Validate: agent receives hookSpecificOutput correctly
 - [ ] Continue
 
+### caliber bridge (ACTIVE 2026-06-10 — design: BRIDGE.md)
+
+_Grade svx against reality: every assessment becomes a signed caliber
+prediction ("this command completes without error", confidence from risk
+level), verified automatically at PostToolUse. Serves the binding rule
+"validate existing policies in real use" and generates the commitment-scheme
+usage caliber's Trust Card verification is waiting on. Opt-in, fail-open,
+no raw command text in claims (Trust Cards travel; commands hold secrets)._
+
+- [ ] Chunk 1: `bridge.py` — config gate, claim construction, predict-on-assess, pending map
+- [ ] Chunk 2: PostToolUse hook branch + outcome grading + pending prune
+- [ ] Chunk 3: `svx enable` PostToolUse wiring, docs, end-to-end test
+
 ### Remaining from SVX-REWORK.md
 
 _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) are solved._
