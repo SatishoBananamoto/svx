@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import io
 import json
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+import pytest
 
 from svx.bridge import (
     RISK_CONFIDENCE,
@@ -194,6 +198,121 @@ class TestGradeOutcome:
             "git push origin main", {"stdout": "ok"}, root, config
         )
         assert outcome is None
+
+
+class TestHookIntegration:
+    """End-to-end: predictions flow through the real hook entry point."""
+
+    def _project(self, tmp_path, monkeypatch):
+        store = tmp_path / "caliber-store"
+        svx_dir = tmp_path / ".svx"
+        svx_dir.mkdir()
+        (svx_dir / "config.yaml").write_text(
+            f"caliber_bridge: true\ncaliber_store: {store}\n"
+        )
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(home))
+        return {"caliber_bridge": True, "caliber_store": str(store)}
+
+    def _run_hook(self, monkeypatch, capsys, hook_input):
+        from svx.cli import _cmd_hook
+
+        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
+        with pytest.raises(SystemExit) as exc:
+            _cmd_hook()
+        assert exc.value.code == 0
+        return capsys.readouterr().out
+
+    # NOTE: svx scopes guarding by command TARGETS — target-less commands
+    # ("git status") are not guarded today and therefore not bridged.
+    # Documented v1 limitation in BRIDGE.md; tests use targeted commands.
+
+    def test_pre_then_post_records_and_grades(self, tmp_path, monkeypatch, capsys):
+        config = self._project(tmp_path, monkeypatch)
+        (tmp_path / "build").mkdir()
+
+        self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf build"},
+            "hook_event_name": "PreToolUse",
+        })
+        preds = load_store_predictions(config, tmp_path)
+        assert len(preds) == 1
+        assert preds[0].outcome is None
+        assert preds[0].commitment_hash
+        assert "rm" in preds[0].claim and "build" not in preds[0].claim
+
+        out = self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf build"},
+            "tool_response": {"stdout": "", "stderr": ""},
+            "hook_event_name": "PostToolUse",
+        })
+        assert json.loads(out) == {}  # post hook emits no decision
+        preds = load_store_predictions(config, tmp_path)
+        assert preds[0].outcome is True
+
+    def test_post_without_bridge_is_silent(self, tmp_path, monkeypatch, capsys):
+        (tmp_path / ".svx").mkdir()
+        (tmp_path / "build").mkdir()
+        home = tmp_path / "home"
+        home.mkdir()
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setenv("HOME", str(home))
+
+        out = self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": "rm -rf build"},
+            "tool_response": {"stdout": ""},
+            "hook_event_name": "PostToolUse",
+        })
+        assert json.loads(out) == {}
+
+    def test_failed_compound_chain_stays_unverified(self, tmp_path, monkeypatch, capsys):
+        config = self._project(tmp_path, monkeypatch)
+        (tmp_path / "build").mkdir()
+        (tmp_path / "dist").mkdir()
+        command = "rm -rf build && rm -rf dist"
+
+        self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "hook_event_name": "PreToolUse",
+        })
+        assert len(load_store_predictions(config, tmp_path)) == 2
+
+        self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"is_error": True},
+            "hook_event_name": "PostToolUse",
+        })
+        # Failure can't be attributed to a segment: both stay unverified
+        preds = load_store_predictions(config, tmp_path)
+        assert all(p.outcome is None for p in preds)
+
+    def test_successful_compound_chain_grades_all(self, tmp_path, monkeypatch, capsys):
+        config = self._project(tmp_path, monkeypatch)
+        (tmp_path / "build").mkdir()
+        (tmp_path / "dist").mkdir()
+        command = "rm -rf build && rm -rf dist"
+
+        self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "hook_event_name": "PreToolUse",
+        })
+        self._run_hook(monkeypatch, capsys, {
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "tool_response": {"stdout": "done", "stderr": ""},
+            "hook_event_name": "PostToolUse",
+        })
+        preds = load_store_predictions(config, tmp_path)
+        assert len(preds) == 2
+        assert all(p.outcome is True for p in preds)
 
 
 class TestPendingPrune:

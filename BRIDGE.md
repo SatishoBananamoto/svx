@@ -82,6 +82,15 @@ Trust Cards get shared; commands can contain secrets. Predictions carry:
 - **`svx enable`** wires both PreToolUse and PostToolUse hooks; the
   PostToolUse handler is a cheap no-op when the bridge is disabled.
 
+## Known v1 limitation: target-based scoping
+
+svx resolves project roots from command *targets*. Target-less commands
+(`git status`, bare `pytest`) are not guarded today, so they are not
+bridged either — the bridge inherits exactly what svx guards, no more.
+Whether svx should also scope by cwd is a guarding-semantics question
+(it would change what svx intercepts, not just what the bridge sees) —
+flagged for Satish, not decided unilaterally.
+
 ## Why this design (decision log)
 
 | Decision | Why |

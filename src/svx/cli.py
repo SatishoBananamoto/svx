@@ -363,6 +363,13 @@ def _cmd_hook():
         print(json.dumps({}))
         sys.exit(0)
 
+    # PostToolUse: grade pending caliber predictions against the tool
+    # result, then get out of the way. No permission decision is emitted.
+    if hook_input.get("hook_event_name") == "PostToolUse":
+        _handle_post_hook(tool_name, tool_input, hook_input.get("tool_response"))
+        print(json.dumps({}))
+        sys.exit(0)
+
     # Build command list depending on tool type
     if tool_name == "Bash":
         command = tool_input.get("command", "")
@@ -406,11 +413,13 @@ def _cmd_hook():
     worst_verdict = Verdict.ALLOW
     worst_cmd = None
     worst_result = None
+    assessed: list = []
 
     for cmd in commands:
         snap = capture(cmd)
         sim = simulate(cmd, snap)
         result = verify(cmd, snap, sim)
+        assessed.append((cmd, result))
 
         # Loop prevention: if same command denied 3+ times recently, escalate
         if result.verdict in (Verdict.CONFIRM, Verdict.BLOCK):
@@ -434,8 +443,45 @@ def _cmd_hook():
     if vibe and worst_verdict == Verdict.CONFIRM:
         worst_verdict = Verdict.ALLOW
 
+    # caliber bridge: assessed commands that may now run become signed
+    # predictions, graded later at PostToolUse. Fail-open by design.
+    if tool_name == "Bash" and worst_verdict != Verdict.BLOCK:
+        from .bridge import bridge_enabled, record_assessment
+
+        for root, config in zip(roots, configs):
+            if bridge_enabled(config):
+                for cmd, result in assessed:
+                    record_assessment(cmd, result, root, config)
+                break  # one bridge root per command; first enabled wins
+
     _emit_hook_output(worst_verdict, worst_cmd, worst_result)
     sys.exit(0)
+
+
+def _handle_post_hook(tool_name: str, tool_input: dict, tool_response) -> None:
+    """PostToolUse: grade pending caliber predictions. Never raises."""
+    try:
+        if tool_name != "Bash":
+            return
+        command = tool_input.get("command", "")
+        if not command:
+            return
+
+        from .bridge import bridge_enabled, grade_outcomes
+
+        commands = parse_command(command)
+        roots = _svx_roots_for_targets(commands)
+        if not roots:
+            return
+        segment_raws = [cmd.raw for cmd in commands]
+        for root in roots:
+            config = load_config(cwd=root)
+            if bridge_enabled(config):
+                grade_outcomes(segment_raws, tool_response, root, config)
+                break
+    except Exception:
+        # Grading is observability, never an obstacle.
+        return
 
 
 def _parse_edit_tool(tool_input: dict) -> ParsedCommand:

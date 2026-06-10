@@ -203,6 +203,38 @@ def grade_outcome(
         return None
 
 
+def grade_outcomes(
+    segment_raws: list[str],
+    tool_response: Any,
+    root: Path,
+    config: dict | None,
+) -> int:
+    """Grade all parsed segments of one executed Bash command.
+
+    Attribution rule (v1): a clean exit proves every segment in the chain
+    ran clean, so success grades all segments correct. A failure cannot be
+    attributed to a specific segment, so it only grades single-segment
+    commands; failed multi-segment chains stay unverified and age out.
+
+    Returns the number of predictions verified.
+    """
+    try:
+        if not bridge_enabled(config):
+            return 0
+        outcome = _outcome_from_response(tool_response)
+        if outcome is None:
+            return 0
+        if outcome is False and len(segment_raws) > 1:
+            return 0
+        graded = 0
+        for raw in segment_raws:
+            if grade_outcome(raw, tool_response, root, config) is not None:
+                graded += 1
+        return graded
+    except Exception:
+        return 0
+
+
 def _outcome_from_response(tool_response: Any) -> Optional[bool]:
     """Extract success/failure from a PostToolUse tool_response.
 
