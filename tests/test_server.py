@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -32,9 +33,33 @@ def test_assess_command_dangerous():
     assert result["commands"][0]["risk_level"] == "critical"
 
 
-def test_assess_command_confirm():
+def test_assess_command_confirm(tmp_path):
     """Destructive command should return confirm."""
-    result = assess_command("git reset --hard HEAD")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "svx-test@example.com"],
+        cwd=repo,
+        check=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "SVX Test"],
+        cwd=repo,
+        check=True,
+    )
+    tracked = repo / "notes.txt"
+    tracked.write_text("before\n")
+    subprocess.run(["git", "add", "notes.txt"], cwd=repo, check=True)
+    subprocess.run(
+        ["git", "commit", "-m", "baseline"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    tracked.write_text("after\n")
+
+    result = assess_command("git reset --hard HEAD", cwd=str(repo))
     assert result["overall_verdict"] == "confirm"
 
 

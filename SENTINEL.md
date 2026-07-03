@@ -19,7 +19,9 @@ Codex completed the caliber bridge wiring slice and repaired public CI setup.
 caliber predictions. `svx disable` removes SVX-owned handlers from both hook
 events while preserving unrelated hooks. README now documents the optional
 Caliber bridge behavior, and GitHub Actions no longer uses the broken
-`pip install pytest pip install -e .` command.
+`pip install pytest pip install -e .` command. The MCP server confirm test now
+creates its own dirty temporary git repo instead of relying on the ambient
+checkout state, so clean CI and dirty local checkouts agree.
 
 Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 126
 tests. `python3 -B -m compileall src tests` passed. CLI smoke checks confirmed
@@ -166,7 +168,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Fix MCP server audit-path test failures — 2026-05-11 · `SVX_AUDIT_DIR`, `/tmp/svx-audit` fallback, 66 tests passing
 - [x] Fix runtime/package version mismatch — 2026-05-11 · `svx.__version__ == 0.3.0`
 - [x] Add tests for file edit simulation edge cases
-- [x] Repair CI install command for bridge tests — 2026-07-03 · install pytest, public caliber repo, then editable svx
+- [x] Repair CI install and clean-checkout test assumptions — 2026-07-03 · install pytest, public caliber repo, editable svx, and isolate dirty git reset test state
 - [ ] Continue
 
 ### Done
@@ -195,7 +197,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Config file risk calibration — 2026-05-12 — `.gitignore` no longer treated as config by default, 93 tests passing
 - [x] Read-before-write context — 2026-05-12 — session tracking for read commands with config-file edit confirmation, 101 tests passing
 - [x] Session cache maintenance — 2026-05-12 — added `svx session-prune` + hook auto-prune, 105 tests passing
-- [x] Caliber bridge completion — 2026-07-03 — PreToolUse predictions, PostToolUse grading, enable/disable wiring, README docs, CI install repair, 126 tests passing
+- [x] Caliber bridge completion — 2026-07-03 — PreToolUse predictions, PostToolUse grading, enable/disable wiring, README docs, CI install/test-state repair, 126 tests passing
 
 </details>
 
@@ -271,7 +273,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 ### 2026-07-03 — Codex caliber bridge completion
 
 - **Worked on:** Finish the bridge branch so `svx` remains public-worthy instead of half-wired.
-- **Completed:** `svx enable` now writes the Bash `PostToolUse` hook; `svx disable` removes SVX handlers from both PreToolUse and PostToolUse while preserving unrelated hooks; README documents the optional Caliber bridge; CI installs pytest, public Caliber, and editable svx in separate valid steps.
+- **Completed:** `svx enable` now writes the Bash `PostToolUse` hook; `svx disable` removes SVX handlers from both PreToolUse and PostToolUse while preserving unrelated hooks; README documents the optional Caliber bridge; CI installs pytest, public Caliber, and editable svx in separate valid steps; the MCP server reset test creates its own dirty git repo instead of depending on local checkout dirtiness.
 - **State:** 126 tests passing, compileall passing, CLI smoke checks for BLOCK/CONFIRM passing. Next: commit/push and verify GitHub Actions on the public repo.
 
 ---
