@@ -179,7 +179,7 @@ def _cmd_init(args):
 
 
 def _cmd_enable():
-    """Enable SVX as a local Claude Code PreToolUse hook."""
+    """Enable SVX as local Claude Code tool hooks."""
     path = settings_path(Path.cwd())
     try:
         settings = load_settings(path)
@@ -191,7 +191,7 @@ def _cmd_enable():
 
     print(f"{GREEN}svx hook enabled{RESET} in {path}")
     if added:
-        print(f"  Added PreToolUse hooks for: {', '.join(added)}")
+        print(f"  Added hook handlers for: {', '.join(added)}")
     else:
         print("  SVX hooks were already present.")
     if backup_path:
@@ -200,7 +200,7 @@ def _cmd_enable():
 
 
 def _cmd_disable():
-    """Disable SVX local Claude Code PreToolUse hooks."""
+    """Disable SVX local Claude Code tool hooks."""
     path = settings_path(Path.cwd())
     if not path.exists():
         print(f"{YELLOW}svx hook already disabled{RESET} ({path} does not exist)")

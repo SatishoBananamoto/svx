@@ -68,7 +68,7 @@ svx check "git reset --hard HEAD" --json
 
 ### Claude Code hook integration
 
-svx can run as a pre-tool hook for Claude Code, automatically intercepting every shell command:
+svx can run as Claude Code tool hooks, automatically intercepting guarded shell and file operations:
 
 ```bash
 svx hook  # reads tool input from stdin
@@ -82,9 +82,9 @@ svx enable
 ```
 
 `svx enable` writes `.claude/settings.local.json` with local `PreToolUse` hooks
-for `Bash`, `Edit`, and `Write`, preserving any existing hooks and creating a
-timestamped backup when the file already exists. Use `/hooks` inside Claude Code
-to inspect the active configuration.
+for `Bash`, `Edit`, and `Write`, plus a `PostToolUse` hook for `Bash`. Existing
+hooks are preserved and a timestamped backup is created when the file already
+exists. Use `/hooks` inside Claude Code to inspect the active configuration.
 
 Bash file writes through stdout redirects, heredocs, and `tee` are routed
 through the same file-write verifier as the `Write` tool. Direct modification
@@ -96,6 +96,11 @@ To remove only the SVX hook entries later:
 ```bash
 svx disable
 ```
+
+The optional Caliber bridge uses the Bash `PostToolUse` hook to grade signed
+predictions after a command completes. It is disabled unless project config sets
+`caliber_bridge: true`; when disabled or when Caliber is unavailable, the
+PostToolUse hook returns an empty allow response.
 
 To temporarily bypass the hook without editing Claude Code settings:
 

@@ -4,14 +4,29 @@
 > Updated before every commit. Single source of truth.
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
-**Last session**: 2026-05-12 — session cache cleanup maintenance
-**Repo**: Ready to commit.
+**Last session**: 2026-07-03 — caliber bridge wiring and CI repair
+**Repo**: Ready to commit; local branch is ahead of `origin/main`.
 
 ---
 
 ## NEXT SESSION — START HERE
 
-### What just happened (2026-05-12)
+### What just happened (2026-07-03)
+
+Codex completed the caliber bridge wiring slice and repaired public CI setup.
+`svx enable` now installs both the existing `PreToolUse` handlers for
+`Bash`/`Edit`/`Write` and the Bash `PostToolUse` handler required to grade
+caliber predictions. `svx disable` removes SVX-owned handlers from both hook
+events while preserving unrelated hooks. README now documents the optional
+Caliber bridge behavior, and GitHub Actions no longer uses the broken
+`pip install pytest pip install -e .` command.
+
+Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 126
+tests. `python3 -B -m compileall src tests` passed. CLI smoke checks confirmed
+`git push --force origin main` returns BLOCK and `rm -rf /tmp/svx-review-danger`
+returns CONFIRM.
+
+Previous session (2026-05-12):
 
 Codex extended session handling with explicit maintenance for stale read-tracking data.
 `svx session-prune` now removes aged read records on demand and the hook path now
@@ -97,13 +112,15 @@ Previous session (2026-03-27):
 
 Major v0.3 rework based on real usage building scroll (SVX blocked legitimate operations). Shipped: project scoping (`svx init` creates `.svx/`), advisory denies with risk classification (replaces binary block/allow), vibe mode (relaxed for exploratory work). 10 new tests. Published to PyPI v0.3.0. CI added.
 
-### #1 Priority: Claude Code hook wiring
+### #1 Priority: publish-ready bridge branch
 
-svx is meant to be a PreToolUse hook for Claude Code. The hook binary exists (`svx hook`) but integration is not streamlined. Need: easy enable/disable, documentation for `settings.local.json` setup, and validation that the hook works end-to-end with the new advisory deny format.
+The local branch contains completed caliber bridge work and is ahead of
+`origin/main`. Next: review the diff, commit the current cleanup, push, and
+confirm GitHub Actions passes on the public repo.
 
 ### What NOT to do
 
-- Don't chase the old flaky-test note without reproducing it — current local suite is 92 passing
+- Don't chase the old flaky-test note without reproducing it — current local suite is 126 passing
 - Don't add new policies before the existing ones are validated in real use
 - Don't make the hook mandatory — opt-in per project via `svx init`
 
@@ -121,7 +138,7 @@ _svx's value is as a Claude Code hook. The hook exists but isn't easy to wire up
 - [x] Validate: agent receives hookSpecificOutput correctly
 - [ ] Continue
 
-### caliber bridge (ACTIVE 2026-06-10 — design: BRIDGE.md)
+### caliber bridge (COMPLETED 2026-07-03 — design: BRIDGE.md)
 
 _Grade svx against reality: every assessment becomes a signed caliber
 prediction ("this command completes without error", confidence from risk
@@ -130,9 +147,9 @@ level), verified automatically at PostToolUse. Serves the binding rule
 usage caliber's Trust Card verification is waiting on. Opt-in, fail-open,
 no raw command text in claims (Trust Cards travel; commands hold secrets)._
 
-- [ ] Chunk 1: `bridge.py` — config gate, claim construction, predict-on-assess, pending map
-- [ ] Chunk 2: PostToolUse hook branch + outcome grading + pending prune
-- [ ] Chunk 3: `svx enable` PostToolUse wiring, docs, end-to-end test
+- [x] Chunk 1: `bridge.py` — config gate, claim construction, predict-on-assess, pending map
+- [x] Chunk 2: PostToolUse hook branch + outcome grading + pending prune
+- [x] Chunk 3: `svx enable` PostToolUse wiring, docs, end-to-end test
 
 ### Remaining from SVX-REWORK.md
 
@@ -149,6 +166,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Fix MCP server audit-path test failures — 2026-05-11 · `SVX_AUDIT_DIR`, `/tmp/svx-audit` fallback, 66 tests passing
 - [x] Fix runtime/package version mismatch — 2026-05-11 · `svx.__version__ == 0.3.0`
 - [x] Add tests for file edit simulation edge cases
+- [x] Repair CI install command for bridge tests — 2026-07-03 · install pytest, public caliber repo, then editable svx
 - [ ] Continue
 
 ### Done
@@ -177,6 +195,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - [x] Config file risk calibration — 2026-05-12 — `.gitignore` no longer treated as config by default, 93 tests passing
 - [x] Read-before-write context — 2026-05-12 — session tracking for read commands with config-file edit confirmation, 101 tests passing
 - [x] Session cache maintenance — 2026-05-12 — added `svx session-prune` + hook auto-prune, 105 tests passing
+- [x] Caliber bridge completion — 2026-07-03 — PreToolUse predictions, PostToolUse grading, enable/disable wiring, README docs, CI install repair, 126 tests passing
 
 </details>
 
@@ -248,6 +267,12 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 - **Worked on:** Project-local escape hatch without hand-editing Claude Code settings.
 - **Completed:** `svx pause`, `svx resume`, `SVX_DISABLED=1`, project config merge order, hook paused-state bypass, README/review/tracker updates, and regressions for CLI toggles plus hook bypasses.
 - **State:** 92 tests passing. Next: session context/read-before-write or config file risk calibration.
+
+### 2026-07-03 — Codex caliber bridge completion
+
+- **Worked on:** Finish the bridge branch so `svx` remains public-worthy instead of half-wired.
+- **Completed:** `svx enable` now writes the Bash `PostToolUse` hook; `svx disable` removes SVX handlers from both PreToolUse and PostToolUse while preserving unrelated hooks; README documents the optional Caliber bridge; CI installs pytest, public Caliber, and editable svx in separate valid steps.
+- **State:** 126 tests passing, compileall passing, CLI smoke checks for BLOCK/CONFIRM passing. Next: commit/push and verify GitHub Actions on the public repo.
 
 ---
 

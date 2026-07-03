@@ -10,6 +10,7 @@ from typing import Any
 
 
 HOOK_TOOLS = ("Bash", "Edit", "Write")
+POST_HOOK_TOOLS = ("Bash",)
 SVX_HOOK_COMMAND = "svx hook"
 
 
@@ -48,22 +49,32 @@ def enable_svx_hook(
     *,
     command: str = SVX_HOOK_COMMAND,
 ) -> tuple[dict[str, Any], list[str]]:
-    """Add svx PreToolUse command hooks for Bash, Edit, and Write."""
+    """Add svx command hooks: PreToolUse for Bash/Edit/Write, plus
+    PostToolUse for Bash (outcome grading for the caliber bridge —
+    a cheap no-op when the bridge is disabled)."""
     settings = _copy_settings(settings)
     hooks = settings.setdefault("hooks", {})
-    pre_tool_use = hooks.setdefault("PreToolUse", [])
-    if not isinstance(pre_tool_use, list):
-        raise ValueError("hooks.PreToolUse must be a list")
 
     added = []
-    for matcher in HOOK_TOOLS:
-        group = _find_or_create_matcher_group(pre_tool_use, matcher)
-        group_hooks = group.setdefault("hooks", [])
-        if not isinstance(group_hooks, list):
-            raise ValueError(f"hooks.PreToolUse matcher '{matcher}' has invalid hooks")
-        if not _has_command_hook(group_hooks, command):
-            group_hooks.append({"type": "command", "command": command})
-            added.append(matcher)
+    for event, matchers in (
+        ("PreToolUse", HOOK_TOOLS),
+        ("PostToolUse", POST_HOOK_TOOLS),
+    ):
+        event_groups = hooks.setdefault(event, [])
+        if not isinstance(event_groups, list):
+            raise ValueError(f"hooks.{event} must be a list")
+        for matcher in matchers:
+            group = _find_or_create_matcher_group(event_groups, matcher)
+            group_hooks = group.setdefault("hooks", [])
+            if not isinstance(group_hooks, list):
+                raise ValueError(
+                    f"hooks.{event} matcher '{matcher}' has invalid hooks"
+                )
+            if not _has_command_hook(group_hooks, command):
+                group_hooks.append({"type": "command", "command": command})
+                added.append(
+                    matcher if event == "PreToolUse" else f"{matcher} ({event})"
+                )
 
     return settings, added
 
@@ -79,36 +90,39 @@ def disable_svx_hook(
     if not isinstance(hooks, dict):
         return settings, 0
 
-    pre_tool_use = hooks.get("PreToolUse")
-    if not isinstance(pre_tool_use, list):
-        return settings, 0
-
     removed = 0
-    kept_groups = []
-    for group in pre_tool_use:
-        if not isinstance(group, dict):
-            kept_groups.append(group)
+    for event in ("PreToolUse", "PostToolUse"):
+        event_groups = hooks.get(event)
+        if event_groups is None:
             continue
-        group_hooks = group.get("hooks")
-        if not isinstance(group_hooks, list):
-            kept_groups.append(group)
+        if not isinstance(event_groups, list):
             continue
 
-        kept_hooks = []
-        for hook in group_hooks:
-            if _is_command_hook(hook, command):
-                removed += 1
-            else:
-                kept_hooks.append(hook)
+        kept_groups = []
+        for group in event_groups:
+            if not isinstance(group, dict):
+                kept_groups.append(group)
+                continue
+            group_hooks = group.get("hooks")
+            if not isinstance(group_hooks, list):
+                kept_groups.append(group)
+                continue
 
-        if kept_hooks:
-            group["hooks"] = kept_hooks
-            kept_groups.append(group)
+            kept_hooks = []
+            for hook in group_hooks:
+                if _is_command_hook(hook, command):
+                    removed += 1
+                else:
+                    kept_hooks.append(hook)
 
-    if kept_groups:
-        hooks["PreToolUse"] = kept_groups
-    else:
-        hooks.pop("PreToolUse", None)
+            if kept_hooks:
+                group["hooks"] = kept_hooks
+                kept_groups.append(group)
+
+        if kept_groups:
+            hooks[event] = kept_groups
+        else:
+            hooks.pop(event, None)
 
     return settings, removed
 

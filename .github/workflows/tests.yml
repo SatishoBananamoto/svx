@@ -11,5 +11,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: pip install pytest pip install -e .
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install pytest git+https://github.com/SatishoBananamoto/caliber.git -e .
       - run: pytest tests/ -q
