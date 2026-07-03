@@ -5,7 +5,7 @@
 
 **Current version**: v0.3.0 (on PyPI as `svx`)
 **Last session**: 2026-07-03 — caliber bridge wiring and CI repair
-**Repo**: Ready to commit; local branch is ahead of `origin/main`.
+**Repo**: Clean and pushed to `origin/main`.
 
 ---
 
@@ -26,7 +26,8 @@ checkout state, so clean CI and dirty local checkouts agree.
 Verification: `python3 -B -m pytest -q -p no:cacheprovider` passed with 126
 tests. `python3 -B -m compileall src tests` passed. CLI smoke checks confirmed
 `git push --force origin main` returns BLOCK and `rm -rf /tmp/svx-review-danger`
-returns CONFIRM.
+returns CONFIRM. GitHub Actions run `28676715168` passed on Python 3.11 and
+3.12 after the clean-checkout test fix.
 
 Previous session (2026-05-12):
 
@@ -114,11 +115,11 @@ Previous session (2026-03-27):
 
 Major v0.3 rework based on real usage building scroll (SVX blocked legitimate operations). Shipped: project scoping (`svx init` creates `.svx/`), advisory denies with risk classification (replaces binary block/allow), vibe mode (relaxed for exploratory work). 10 new tests. Published to PyPI v0.3.0. CI added.
 
-### #1 Priority: publish-ready bridge branch
+### #1 Priority: public repo follow-up
 
-The local branch contains completed caliber bridge work and is ahead of
-`origin/main`. Next: review the diff, commit the current cleanup, push, and
-confirm GitHub Actions passes on the public repo.
+The caliber bridge branch is pushed and CI is green. Next SVX-specific work is
+an optional post-bridge public README/release review, or move on to reviewing
+the next public repo.
 
 ### What NOT to do
 
@@ -274,7 +275,7 @@ _Problems 2, 4, 5, 6 from the rework brief. Problem 1 (context) and 3 (binary) a
 
 - **Worked on:** Finish the bridge branch so `svx` remains public-worthy instead of half-wired.
 - **Completed:** `svx enable` now writes the Bash `PostToolUse` hook; `svx disable` removes SVX handlers from both PreToolUse and PostToolUse while preserving unrelated hooks; README documents the optional Caliber bridge; CI installs pytest, public Caliber, and editable svx in separate valid steps; the MCP server reset test creates its own dirty git repo instead of depending on local checkout dirtiness.
-- **State:** 126 tests passing, compileall passing, CLI smoke checks for BLOCK/CONFIRM passing. Next: commit/push and verify GitHub Actions on the public repo.
+- **State:** 126 tests passing locally, compileall passing, CLI smoke checks for BLOCK/CONFIRM passing, and GitHub Actions run `28676715168` passing on Python 3.11/3.12.
 
 ---
 
